@@ -1,6 +1,8 @@
 .DS_Store
 .DerivedData/
 DerivedData/
+.venv/
+__pycache__/
 *.xcuserstate
 xcuserdata/
 HealthSync.xcodeproj/project.xcworkspace/xcuserdata/
