@@ -1,0 +1,6 @@
+.DS_Store
+.DerivedData/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+HealthSync.xcodeproj/project.xcworkspace/xcuserdata/
