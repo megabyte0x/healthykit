@@ -36,9 +36,18 @@ enum StorageMode: String, CaseIterable, Codable, Identifiable {
         case .hostedHealthSync: "Hosted HealthSync storage"
         }
     }
+
+    var showsManualBackendSettings: Bool {
+        switch self {
+        case .customBackend: true
+        case .hostedHealthSync: false
+        }
+    }
 }
 
 struct AppSettings: Codable, Equatable {
+    static let hostedBackendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+
     var backendURL: String
     var selectedTypes: Set<HealthDataType>
     var syncFrequency: SyncFrequency
@@ -77,6 +86,15 @@ struct AppSettings: Codable, Equatable {
         hostedWorkspaceID: nil,
         hostedAgentEndpoint: nil
     )
+
+    var effectiveBackendURL: String {
+        switch storageMode {
+        case .customBackend:
+            backendURL
+        case .hostedHealthSync:
+            Self.hostedBackendURL
+        }
+    }
 
     init(
         backendURL: String,

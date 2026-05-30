@@ -38,7 +38,7 @@ struct HostedStorageSetupPresentation: Equatable {
     }
 
     var isCreateButtonDisabled: Bool {
-        isBusy || trimmedBackendURL.isEmpty
+        isBusy
     }
 
     var progressMessage: String? {
@@ -54,10 +54,6 @@ struct HostedStorageSetupPresentation: Equatable {
             return "Hosted storage is ready."
         }
 
-        if trimmedBackendURL.isEmpty {
-            return "Enter the hosted backend URL before creating storage."
-        }
-
         return nil
     }
 
@@ -70,15 +66,7 @@ struct HostedStorageSetupPresentation: Equatable {
             return .success
         }
 
-        if trimmedBackendURL.isEmpty {
-            return .info
-        }
-
         return .none
-    }
-
-    private var trimmedBackendURL: String {
-        trimmed(backendURL) ?? ""
     }
 
     private var hasAgentAccess: Bool {
@@ -134,26 +122,28 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Backend") {
-                    TextField("https://api.example.com", text: $appState.settings.backendURL)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .autocorrectionDisabled()
+                if appState.settings.storageMode.showsManualBackendSettings {
+                    Section("Backend") {
+                        TextField("https://api.example.com", text: $appState.settings.backendURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .autocorrectionDisabled()
 
-                    SecureField(appState.hasStoredToken ? "New token (stored)" : "Auth token", text: $appState.authTokenDraft)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        SecureField(appState.hasStoredToken ? "New token (stored)" : "Auth token", text: $appState.authTokenDraft)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
 
-                    Button {
-                        Task { await appState.saveSettingsAndToken() }
-                    } label: {
-                        Label("Save settings", systemImage: "square.and.arrow.down")
-                    }
+                        Button {
+                            Task { await appState.saveSettingsAndToken() }
+                        } label: {
+                            Label("Save settings", systemImage: "square.and.arrow.down")
+                        }
 
-                    Button {
-                        Task { await appState.testConnection() }
-                    } label: {
-                        Label("Test connection", systemImage: "network")
+                        Button {
+                            Task { await appState.testConnection() }
+                        } label: {
+                            Label("Test connection", systemImage: "network")
+                        }
                     }
                 }
 

@@ -50,6 +50,29 @@ final class APIClientTests: XCTestCase {
     }
 }
 
+final class AppSettingsHostedEndpointTests: XCTestCase {
+    func testHostedStorageUsesManagedEndpointWhenEditableBackendURLIsEmpty() {
+        var settings = AppSettings.default
+        settings.storageMode = .hostedHealthSync
+        settings.backendURL = ""
+
+        XCTAssertEqual(settings.effectiveBackendURL, AppSettings.hostedBackendURL)
+    }
+
+    func testCustomStorageUsesUserBackendURL() {
+        var settings = AppSettings.default
+        settings.storageMode = .customBackend
+        settings.backendURL = "https://api.example.com"
+
+        XCTAssertEqual(settings.effectiveBackendURL, "https://api.example.com")
+    }
+
+    func testOnlyCustomStorageShowsManualBackendSettings() {
+        XCTAssertTrue(StorageMode.customBackend.showsManualBackendSettings)
+        XCTAssertFalse(StorageMode.hostedHealthSync.showsManualBackendSettings)
+    }
+}
+
 final class SupportDevelopmentPromptTests: XCTestCase {
     func testPromptUsesZcashOnlySupportDetails() {
         let prompt = SupportDevelopmentPrompt.current
@@ -81,6 +104,20 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
         XCTAssertNil(presentation.feedbackMessage)
     }
 
+    func testHostedSetupDoesNotRequireManualBackendURL() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "",
+            lastError: nil,
+            hostedAgentEndpoint: nil,
+            hostedAgentToken: ""
+        )
+
+        XCTAssertFalse(presentation.isCreateButtonDisabled)
+        XCTAssertNil(presentation.feedbackMessage)
+        XCTAssertEqual(presentation.feedbackKind, .none)
+    }
+
     func testProvisioningErrorIsVisibleToTheUser() {
         let presentation = HostedStorageSetupPresentation(
             isBusy: false,
@@ -93,20 +130,6 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.feedbackMessage, "Network unavailable or server temporarily unavailable.")
         XCTAssertEqual(presentation.feedbackKind, .error)
         XCTAssertFalse(presentation.isCreateButtonDisabled)
-    }
-
-    func testMissingHostedBackendURLExplainsWhyCreateIsDisabled() {
-        let presentation = HostedStorageSetupPresentation(
-            isBusy: false,
-            backendURL: "   ",
-            lastError: nil,
-            hostedAgentEndpoint: nil,
-            hostedAgentToken: ""
-        )
-
-        XCTAssertTrue(presentation.isCreateButtonDisabled)
-        XCTAssertEqual(presentation.feedbackMessage, "Enter the hosted backend URL before creating storage.")
-        XCTAssertEqual(presentation.feedbackKind, .info)
     }
 
     func testReadyStateShowsHostedStorageSuccess() {

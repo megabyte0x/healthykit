@@ -88,7 +88,7 @@ final class AppState: ObservableObject {
     func createHostedStorage() async {
         await runBusy {
             let response = try await APIClient(maxAttempts: 1).provisionHostedWorkspace(
-                baseURL: settings.backendURL,
+                baseURL: AppSettings.hostedBackendURL,
                 label: "Personal Health"
             )
             settings.storageMode = .hostedHealthSync
@@ -214,7 +214,7 @@ final class AppState: ObservableObject {
             throw APIClientError.missingToken
         }
         return UploadConfiguration(
-            baseURL: settings.backendURL,
+            baseURL: settings.effectiveBackendURL,
             token: token,
             deviceID: try await store.deviceID(),
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
