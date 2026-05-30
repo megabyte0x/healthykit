@@ -2,6 +2,8 @@
 
 This is a local-only FastAPI stub for testing the iOS app's sync request shape. It validates that an `Authorization: Bearer ...` header exists, prints summary counts only, and returns an accepted response.
 
+It does not persist data. Use `backend/` for the real Postgres-backed service with Docker, migrations, and fetch APIs.
+
 Run it with:
 
 ```bash

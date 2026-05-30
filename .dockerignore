@@ -1,10 +1,10 @@
 .DS_Store
 .DerivedData/
-DerivedData/
-.env
+.git/
 .pytest_cache/
 .venv/
+DerivedData/
 __pycache__/
+*.pyc
 *.xcuserstate
 xcuserdata/
-HealthSync.xcodeproj/project.xcworkspace/xcuserdata/

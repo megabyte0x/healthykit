@@ -68,9 +68,30 @@ Run the full XCTest suite with an available simulator:
 xcodebuild test -project HealthSync.xcodeproj -scheme HealthSync -destination 'platform=iOS Simulator,name=iPhone 16' -derivedDataPath .DerivedData CODE_SIGNING_ALLOWED=NO
 ```
 
+## Persistent Backend
+
+For real persistent storage, use the backend in `backend/`. It stores uploaded HealthSync data in Postgres and exposes fetch endpoints for metrics, workouts, and sync batches.
+
+Fastest local setup:
+
+```bash
+cp .env.example .env
+python3 -m backend.scripts.generate_token
+```
+
+Paste the generated token into `.env` as `API_TOKEN`, then run:
+
+```bash
+docker compose up --build
+```
+
+Also replace `POSTGRES_PASSWORD` in `.env` before using the stack beyond local testing. Use `http://127.0.0.1:8080` from the simulator. For a real iPhone, use a private HTTPS endpoint reachable from the phone, or use your Mac's LAN address for same-Wi-Fi testing.
+
+For Supabase, Neon, or another managed Postgres database, set `DATABASE_URL` and `API_TOKEN`, run `alembic upgrade head`, and deploy `uvicorn backend.main:app`. See `backend/README.md` for the full setup and fetch API examples.
+
 ## Backend Stub
 
-For local testing:
+The `backend_stub/` service is still available as a local-only request-shape stub. It does not persist data.
 
 ```bash
 python3 -m venv .venv
@@ -78,8 +99,6 @@ source .venv/bin/activate
 pip install -r backend_stub/requirements.txt
 uvicorn backend_stub.main:app --host 0.0.0.0 --port 8080
 ```
-
-Use `http://127.0.0.1:8080` from the simulator. For real-device testing, use a private HTTPS endpoint reachable from the phone.
 
 For a real iPhone on the same Wi-Fi as this Mac, use the Mac's LAN address instead, for example:
 
