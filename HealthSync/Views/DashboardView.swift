@@ -27,6 +27,7 @@ struct DashboardView: View {
                             Label("Manual sync", systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
+                    .disabled(appState.isBusy)
 
                     NavigationLink {
                         BackfillView()

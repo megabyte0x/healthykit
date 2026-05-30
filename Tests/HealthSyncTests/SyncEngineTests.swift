@@ -55,7 +55,52 @@ final actor SucceedingUploader: SyncUploading {
     }
 }
 
+final actor PausingUploader: SyncUploading {
+    private(set) var uploadCount = 0
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var releases: [CheckedContinuation<Void, Never>] = []
+
+    func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult {
+        uploadCount += 1
+        resumeSatisfiedWaiters()
+        await withCheckedContinuation { continuation in
+            releases.append(continuation)
+        }
+        return UploadResult(ok: true, received: batch.payload.metrics.count + batch.payload.workouts.count, duplicates: 0)
+    }
+
+    func waitForUploadCount(_ count: Int) async {
+        if uploadCount >= count { return }
+        await withCheckedContinuation { continuation in
+            waiters.append((count, continuation))
+        }
+    }
+
+    func releaseUploads() {
+        let pending = releases
+        releases.removeAll()
+        pending.forEach { $0.resume() }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        var remaining: [(Int, CheckedContinuation<Void, Never>)] = []
+        for waiter in waiters {
+            if uploadCount >= waiter.0 {
+                waiter.1.resume()
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
+    }
+}
+
 final class SyncEngineTests: XCTestCase {
+    func testBusyOperationRejectsSecondStart() {
+        XCTAssertTrue(BusyOperation.canStart(isBusy: false))
+        XCTAssertFalse(BusyOperation.canStart(isBusy: true))
+    }
+
     func testFailedUploadKeepsBatchQueuedForRetry() async throws {
         let store = SyncEngineTestsStore()
         let engine = SyncEngine(store: store, uploader: FailingUploader())
@@ -103,5 +148,40 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(uploadedIDs, [batch.id])
         XCTAssertTrue(pending.isEmpty)
         XCTAssertNotNil(lastSuccessfulSyncAt)
+    }
+
+    func testConcurrentUploadPendingDoesNotUploadSameBatchTwice() async throws {
+        let store = SyncEngineTestsStore()
+        let uploader = PausingUploader()
+        let engine = SyncEngine(store: store, uploader: uploader)
+        let payload = SyncPayload.empty(
+            deviceID: "device-123",
+            dateRange: SyncDateRange(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 60)),
+            timezone: "Asia/Kolkata"
+        )
+
+        try await engine.queue(payload: payload)
+        let firstRun = Task {
+            await engine.uploadPending(
+                configuration: UploadConfiguration(baseURL: "https://example.com", token: "secret-token", deviceID: "device-123", appVersion: "1.0")
+            )
+        }
+        await uploader.waitForUploadCount(1)
+
+        let secondRun = Task {
+            await engine.uploadPending(
+                configuration: UploadConfiguration(baseURL: "https://example.com", token: "secret-token", deviceID: "device-123", appVersion: "1.0")
+            )
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let uploadCountWhileFirstRunIsActive = await uploader.uploadCount
+        await uploader.releaseUploads()
+        let firstResult = await firstRun.value
+        let secondResult = await secondRun.value
+
+        XCTAssertEqual(uploadCountWhileFirstRunIsActive, 1)
+        XCTAssertEqual(firstResult.uploadedCount, 1)
+        XCTAssertEqual(secondResult.uploadedCount, 0)
     }
 }

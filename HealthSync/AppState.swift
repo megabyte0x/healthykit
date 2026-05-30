@@ -1,6 +1,12 @@
 import Foundation
 import SwiftUI
 
+enum BusyOperation {
+    static func canStart(isBusy: Bool) -> Bool {
+        !isBusy
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var shouldShowOnboarding = true
@@ -260,6 +266,7 @@ final class AppState: ObservableObject {
     }
 
     private func runBusy(_ operation: () async throws -> Void) async {
+        guard BusyOperation.canStart(isBusy: isBusy) else { return }
         isBusy = true
         lastError = nil
         defer { isBusy = false }

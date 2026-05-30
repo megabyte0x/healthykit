@@ -18,9 +18,10 @@ struct SyncRunResult: Equatable {
     static let empty = SyncRunResult(uploadedCount: 0, failedCount: 0, messages: [])
 }
 
-final class SyncEngine {
+actor SyncEngine {
     private let store: BatchPersisting
     private let uploader: SyncUploading
+    private var isUploading = false
 
     init(store: BatchPersisting, uploader: SyncUploading = APIClient()) {
         self.store = store
@@ -41,6 +42,10 @@ final class SyncEngine {
     }
 
     func uploadPending(configuration: UploadConfiguration) async -> SyncRunResult {
+        guard !isUploading else { return .empty }
+        isUploading = true
+        defer { isUploading = false }
+
         let attemptedAt = Date()
         do {
             try await store.recordSyncAttempt(at: attemptedAt)
