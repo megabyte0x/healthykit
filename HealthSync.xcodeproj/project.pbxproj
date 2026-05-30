@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		110000000000000000000001 /* HealthSyncApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000101 /* HealthSyncApp.swift */; };
 		110000000000000000000002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000102 /* AppState.swift */; };
+		110000000000000000000003 /* HealthNormalizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000201 /* HealthNormalizerTests.swift */; };
+		110000000000000000000004 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000202 /* APIClientTests.swift */; };
+		110000000000000000000005 /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000203 /* SyncEngineTests.swift */; };
+		110000000000000000000020 /* LocalStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000204 /* LocalStoreTests.swift */; };
 		110000000000000000000006 /* HealthMetric.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000105 /* HealthMetric.swift */; };
 		110000000000000000000007 /* HealthWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000106 /* HealthWorkout.swift */; };
 		110000000000000000000008 /* SyncBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000107 /* SyncBatch.swift */; };
@@ -29,9 +33,6 @@
 		110000000000000000000017 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000116 /* libsqlite3.tbd */; };
 		110000000000000000000018 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000117 /* HealthKit.framework */; };
 		110000000000000000000019 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000118 /* Security.framework */; };
-		110000000000000000000003 /* HealthNormalizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000201 /* HealthNormalizerTests.swift */; };
-		110000000000000000000004 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000202 /* APIClientTests.swift */; };
-		110000000000000000000005 /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000203 /* SyncEngineTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		110000000000000000000201 /* HealthNormalizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthNormalizerTests.swift; sourceTree = "<group>"; };
 		110000000000000000000202 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 		110000000000000000000203 /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
+		110000000000000000000204 /* LocalStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStoreTests.swift; sourceTree = "<group>"; };
 		110000000000000000000601 /* HealthSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		110000000000000000000602 /* HealthSyncTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HealthSyncTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -145,6 +147,7 @@
 				110000000000000000000201 /* HealthNormalizerTests.swift */,
 				110000000000000000000202 /* APIClientTests.swift */,
 				110000000000000000000203 /* SyncEngineTests.swift */,
+				110000000000000000000204 /* LocalStoreTests.swift */,
 			);
 			path = HealthSyncTests;
 			sourceTree = "<group>";
@@ -323,6 +326,7 @@
 				110000000000000000000003 /* HealthNormalizerTests.swift in Sources */,
 				110000000000000000000004 /* APIClientTests.swift in Sources */,
 				110000000000000000000005 /* SyncEngineTests.swift in Sources */,
+				110000000000000000000020 /* LocalStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,7 +463,7 @@
 				CODE_SIGN_ENTITLEMENTS = HealthSync/HealthSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 9UR77TD484;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HealthSync/Info.plist;
@@ -487,7 +491,7 @@
 				CODE_SIGN_ENTITLEMENTS = HealthSync/HealthSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 9UR77TD484;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HealthSync/Info.plist;

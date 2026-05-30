@@ -274,10 +274,11 @@ actor SQLiteLocalStore: BatchPersisting {
     }
 
     private func latestError() throws -> String? {
-        let statement = try prepare("SELECT message FROM logs WHERE level = 'error' ORDER BY created_at DESC LIMIT 1")
+        let statement = try prepare("SELECT level, message FROM logs ORDER BY created_at DESC LIMIT 1")
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
-        return columnText(statement, 0)
+        guard columnText(statement, 0) == SyncLogLevel.error.rawValue else { return nil }
+        return columnText(statement, 1)
     }
 
     private func readBatch(from statement: OpaquePointer?) throws -> SyncBatch {
