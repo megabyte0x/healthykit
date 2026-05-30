@@ -37,3 +37,18 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(APIClientError.authRejected.userMessage.contains("secret-token"))
     }
 }
+
+final class SupportDevelopmentPromptTests: XCTestCase {
+    func testPromptUsesZcashOnlySupportDetails() {
+        let prompt = SupportDevelopmentPrompt.current
+
+        XCTAssertEqual(prompt.paymentMethodLabel, "ZEC")
+        XCTAssertEqual(prompt.message, "Support the application development by paying some ZEC.")
+        XCTAssertFalse(prompt.message.contains("$"))
+        XCTAssertFalse(prompt.message.contains("10"))
+        XCTAssertEqual(
+            prompt.zcashAddress,
+            "u1cyxqx2za9c7g2h7tjz0nn7rdf5fgykmqgw4eke7fvfa9pd7lynjkqfeq4hzd3tkys4pvku5xnmmwclm77jv9ljkhdefrvzc6pgehc63rcnmylqlxt0fmz55t6wdp6dyk5w2hzx06hs93xun5smexvwn04ju4ppy54gx477ftequajh0t"
+        )
+    }
+}
