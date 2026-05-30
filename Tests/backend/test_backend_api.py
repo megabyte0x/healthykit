@@ -158,3 +158,22 @@ def test_hosted_provisioning_can_be_disabled(tmp_path: Path) -> None:
     response = client.post("/api/hosted/workspaces", json={"label": "Personal Health"})
 
     assert response.status_code == 404
+
+
+def test_hosted_sync_rows_are_workspace_scoped(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    headers = {"Authorization": f"Bearer {provisioned['ingest_token']}", "X-App-Version": "1.0"}
+
+    response = client.post("/api/apple-health/sync", headers=headers, json=sample_payload())
+
+    assert response.status_code == 200
+    with client.app.state.session_factory() as db:
+        from backend.models import HealthMetricRecord, HealthWorkoutRecord, SyncBatchRecord
+
+        batch = db.query(SyncBatchRecord).one()
+        metric = db.query(HealthMetricRecord).one()
+        workout = db.query(HealthWorkoutRecord).one()
+        assert batch.workspace_id == provisioned["workspace_id"]
+        assert metric.workspace_id == provisioned["workspace_id"]
+        assert workout.workspace_id == provisioned["workspace_id"]

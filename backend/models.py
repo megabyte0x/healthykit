@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy import DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -23,9 +23,64 @@ class DeviceRecord(Base):
     app_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class WorkspaceRecord(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class WorkspaceDeviceRecord(Base):
+    __tablename__ = "workspace_devices"
+
+    workspace_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    device_id: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("devices.device_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class AccessTokenRecord(Base):
+    __tablename__ = "access_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_access_tokens_token_hash", "token_hash", unique=True),
+    )
+
+
 class SyncBatchRecord(Base):
     __tablename__ = "sync_batches"
 
+    workspace_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+        nullable=False,
+        default="self_hosted",
+        index=True,
+    )
     export_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     device_id: Mapped[str] = mapped_column(
         String(128),
@@ -45,12 +100,19 @@ class SyncBatchRecord(Base):
 
     __table_args__ = (
         Index("ix_sync_batches_device_received", "device_id", "received_at"),
+        Index("ix_sync_batches_workspace_received", "workspace_id", "received_at"),
     )
 
 
 class HealthMetricRecord(Base):
     __tablename__ = "health_metrics"
 
+    workspace_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+        default="self_hosted",
+    )
     device_id: Mapped[str] = mapped_column(
         String(128),
         ForeignKey("devices.device_id", ondelete="CASCADE"),
@@ -72,19 +134,30 @@ class HealthMetricRecord(Base):
     )
     export_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("sync_batches.export_id", ondelete="CASCADE"),
         nullable=False,
     )
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "export_id"],
+            ["sync_batches.workspace_id", "sync_batches.export_id"],
+            ondelete="CASCADE",
+        ),
         Index("ix_health_metrics_device_type_start", "device_id", "type", "start_at"),
         Index("ix_health_metrics_device_start", "device_id", "start_at"),
+        Index("ix_health_metrics_workspace_type_start", "workspace_id", "type", "start_at"),
     )
 
 
 class HealthWorkoutRecord(Base):
     __tablename__ = "health_workouts"
 
+    workspace_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+        default="self_hosted",
+    )
     device_id: Mapped[str] = mapped_column(
         String(128),
         ForeignKey("devices.device_id", ondelete="CASCADE"),
@@ -108,11 +181,16 @@ class HealthWorkoutRecord(Base):
     )
     export_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("sync_batches.export_id", ondelete="CASCADE"),
         nullable=False,
     )
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "export_id"],
+            ["sync_batches.workspace_id", "sync_batches.export_id"],
+            ondelete="CASCADE",
+        ),
         Index("ix_health_workouts_device_activity_start", "device_id", "activity_type", "start_at"),
         Index("ix_health_workouts_device_start", "device_id", "start_at"),
+        Index("ix_health_workouts_workspace_activity_start", "workspace_id", "activity_type", "start_at"),
     )

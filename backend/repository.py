@@ -17,10 +17,13 @@ from .schemas import (
     WorkoutListResponse,
 )
 
+SELF_HOSTED_WORKSPACE_ID = "self_hosted"
+
 
 def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str | None) -> UploadResult:
     received_at = datetime.now(timezone.utc)
     export_id = str(payload.export_id)
+    workspace_id = SELF_HOSTED_WORKSPACE_ID
     duplicates = 0
 
     try:
@@ -38,11 +41,12 @@ def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str |
             device.last_seen_at = received_at
             device.app_version = app_version or device.app_version
 
-        batch = db.get(SyncBatchRecord, export_id)
+        batch = db.get(SyncBatchRecord, (workspace_id, export_id))
         if batch is None:
             db.add(
                 SyncBatchRecord(
                     export_id=export_id,
+                    workspace_id=workspace_id,
                     device_id=payload.device_id,
                     generated_at=payload.generated_at,
                     received_at=received_at,
@@ -61,10 +65,11 @@ def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str |
             batch.workouts_count = len(payload.workouts)
 
         for metric in payload.metrics:
-            record = db.get(HealthMetricRecord, (payload.device_id, metric.id))
+            record = db.get(HealthMetricRecord, (workspace_id, payload.device_id, metric.id))
             if record is None:
                 db.add(
                     HealthMetricRecord(
+                        workspace_id=workspace_id,
                         device_id=payload.device_id,
                         id=metric.id,
                         type=metric.type,
@@ -91,10 +96,11 @@ def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str |
                 record.export_id = export_id
 
         for workout in payload.workouts:
-            record = db.get(HealthWorkoutRecord, (payload.device_id, workout.id))
+            record = db.get(HealthWorkoutRecord, (workspace_id, payload.device_id, workout.id))
             if record is None:
                 db.add(
                     HealthWorkoutRecord(
+                        workspace_id=workspace_id,
                         device_id=payload.device_id,
                         id=workout.id,
                         activity_type=workout.activity_type,
