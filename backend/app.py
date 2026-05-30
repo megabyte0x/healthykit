@@ -8,10 +8,25 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session, sessionmaker
 
+from .auth import AuthContext, bearer_token, resolve_agent_auth, resolve_sync_auth
 from .config import Settings
 from .database import create_engine_for_url, create_session_factory
-from .repository import list_metrics, list_sync_batches, list_workouts, persist_sync_payload
-from .schemas import MetricListResponse, SyncBatchListResponse, SyncPayloadIn, UploadResult, WorkoutListResponse
+from .repository import (
+    list_metrics,
+    list_sync_batches,
+    list_workouts,
+    persist_sync_payload,
+    provision_hosted_workspace,
+)
+from .schemas import (
+    HostedWorkspaceCreate,
+    HostedWorkspaceResponse,
+    MetricListResponse,
+    SyncBatchListResponse,
+    SyncPayloadIn,
+    UploadResult,
+    WorkoutListResponse,
+)
 
 
 def create_app(
@@ -26,12 +41,15 @@ def create_app(
 
     app = FastAPI(title="HealthSync Backend", version="1.0.0")
 
-    def require_token(authorization: Annotated[str | None, Header()] = None) -> None:
-        if authorization is None or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-        token = authorization.removeprefix("Bearer ").strip()
+    def require_self_hosted_auth(authorization: Annotated[str | None, Header()] = None) -> AuthContext:
+        token = bearer_token(authorization)
         if not secrets.compare_digest(token.encode("utf-8"), settings.api_token.encode("utf-8")):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bearer token")
+        return AuthContext(
+            workspace_id=settings.self_hosted_workspace_id,
+            token_kind="self_hosted",
+            self_hosted=True,
+        )
 
     def get_db() -> Generator[Session]:
         session = session_factory()
@@ -40,22 +58,43 @@ def create_app(
         finally:
             session.close()
 
+    def require_sync_auth(
+        authorization: Annotated[str | None, Header()] = None,
+        db: Session = Depends(get_db),
+    ) -> AuthContext:
+        return resolve_sync_auth(db, settings, authorization)
+
+    def require_agent_auth(
+        authorization: Annotated[str | None, Header()] = None,
+        db: Session = Depends(get_db),
+    ) -> AuthContext:
+        return resolve_agent_auth(db, settings, authorization)
+
     @app.get("/health")
     def health() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.post("/api/hosted/workspaces", response_model=HostedWorkspaceResponse)
+    def hosted_workspaces(
+        payload: HostedWorkspaceCreate,
+        db: Session = Depends(get_db),
+    ) -> HostedWorkspaceResponse:
+        if not settings.hosted_provisioning_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        return provision_hosted_workspace(db, settings, payload.label)
+
     @app.post("/api/apple-health/sync", response_model=UploadResult)
     def apple_health_sync(
         payload: SyncPayloadIn,
-        _: None = Depends(require_token),
+        auth: AuthContext = Depends(require_sync_auth),
         db: Session = Depends(get_db),
         x_app_version: Annotated[str | None, Header(alias="X-App-Version")] = None,
     ) -> UploadResult:
-        return persist_sync_payload(db, payload, x_app_version)
+        return persist_sync_payload(db, payload, x_app_version, auth.workspace_id)
 
     @app.get("/api/apple-health/metrics", response_model=MetricListResponse)
     def apple_health_metrics(
-        _: None = Depends(require_token),
+        auth: AuthContext = Depends(require_self_hosted_auth),
         db: Session = Depends(get_db),
         device_id: str | None = None,
         metric_type: str | None = Query(default=None, alias="type"),
@@ -66,6 +105,7 @@ def create_app(
     ) -> MetricListResponse:
         return list_metrics(
             db,
+            workspace_id=auth.workspace_id,
             device_id=device_id,
             metric_type=metric_type,
             start_at=start_at,
@@ -76,7 +116,7 @@ def create_app(
 
     @app.get("/api/apple-health/workouts", response_model=WorkoutListResponse)
     def apple_health_workouts(
-        _: None = Depends(require_token),
+        auth: AuthContext = Depends(require_self_hosted_auth),
         db: Session = Depends(get_db),
         device_id: str | None = None,
         activity_type: str | None = None,
@@ -87,6 +127,7 @@ def create_app(
     ) -> WorkoutListResponse:
         return list_workouts(
             db,
+            workspace_id=auth.workspace_id,
             device_id=device_id,
             activity_type=activity_type,
             start_at=start_at,
@@ -97,12 +138,32 @@ def create_app(
 
     @app.get("/api/apple-health/syncs", response_model=SyncBatchListResponse)
     def apple_health_syncs(
-        _: None = Depends(require_token),
+        auth: AuthContext = Depends(require_self_hosted_auth),
         db: Session = Depends(get_db),
         device_id: str | None = None,
         limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
         offset: int = Query(default=0, ge=0),
     ) -> SyncBatchListResponse:
-        return list_sync_batches(db, device_id=device_id, limit=limit, offset=offset)
+        return list_sync_batches(db, workspace_id=auth.workspace_id, device_id=device_id, limit=limit, offset=offset)
+
+    @app.get("/api/agent/metrics", response_model=MetricListResponse)
+    def agent_metrics(
+        auth: AuthContext = Depends(require_agent_auth),
+        db: Session = Depends(get_db),
+        metric_type: str | None = Query(default=None, alias="type"),
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
+        offset: int = Query(default=0, ge=0),
+    ) -> MetricListResponse:
+        return list_metrics(
+            db,
+            workspace_id=auth.workspace_id,
+            metric_type=metric_type,
+            start_at=start_at,
+            end_at=end_at,
+            limit=limit,
+            offset=offset,
+        )
 
     return app

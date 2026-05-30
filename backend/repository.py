@@ -5,10 +5,20 @@ from datetime import datetime, timezone
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session
 
-from .models import DeviceRecord, HealthMetricRecord, HealthWorkoutRecord, SyncBatchRecord
+from .config import Settings
+from .models import (
+    AccessTokenRecord,
+    DeviceRecord,
+    HealthMetricRecord,
+    HealthWorkoutRecord,
+    SyncBatchRecord,
+    WorkspaceDeviceRecord,
+    WorkspaceRecord,
+)
 from .schemas import (
     HealthMetricOut,
     HealthWorkoutOut,
+    HostedWorkspaceResponse,
     MetricListResponse,
     SyncBatchListResponse,
     SyncBatchOut,
@@ -16,17 +26,64 @@ from .schemas import (
     UploadResult,
     WorkoutListResponse,
 )
+from .tokens import generate_token, token_hash
 
 SELF_HOSTED_WORKSPACE_ID = "self_hosted"
 
 
-def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str | None) -> UploadResult:
+def provision_hosted_workspace(db: Session, settings: Settings, label: str | None) -> HostedWorkspaceResponse:
+    created_at = datetime.now(timezone.utc)
+    workspace_id = generate_token("wk")
+    ingest_token = generate_token("hs_ingest")
+    agent_token = generate_token("hs_agent")
+
+    try:
+        db.add(WorkspaceRecord(id=workspace_id, created_at=created_at, label=label))
+        db.add_all(
+            [
+                AccessTokenRecord(
+                    id=generate_token("tok"),
+                    workspace_id=workspace_id,
+                    kind="ingest",
+                    token_hash=token_hash(ingest_token, settings.token_hash_secret),
+                    created_at=created_at,
+                ),
+                AccessTokenRecord(
+                    id=generate_token("tok"),
+                    workspace_id=workspace_id,
+                    kind="agent_read",
+                    token_hash=token_hash(agent_token, settings.token_hash_secret),
+                    created_at=created_at,
+                ),
+            ]
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return HostedWorkspaceResponse(
+        workspace_id=workspace_id,
+        backend_url=settings.hosted_public_base_url,
+        ingest_token=ingest_token,
+        agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
+        agent_token=agent_token,
+    )
+
+
+def persist_sync_payload(
+    db: Session,
+    payload: SyncPayloadIn,
+    app_version: str | None,
+    workspace_id: str,
+) -> UploadResult:
     received_at = datetime.now(timezone.utc)
     export_id = str(payload.export_id)
-    workspace_id = SELF_HOSTED_WORKSPACE_ID
     duplicates = 0
 
     try:
+        ensure_workspace(db, workspace_id, received_at)
+
         device = db.get(DeviceRecord, payload.device_id)
         if device is None:
             db.add(
@@ -40,6 +97,19 @@ def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str |
         else:
             device.last_seen_at = received_at
             device.app_version = app_version or device.app_version
+
+        workspace_device = db.get(WorkspaceDeviceRecord, (workspace_id, payload.device_id))
+        if workspace_device is None:
+            db.add(
+                WorkspaceDeviceRecord(
+                    workspace_id=workspace_id,
+                    device_id=payload.device_id,
+                    created_at=received_at,
+                    last_seen_at=received_at,
+                )
+            )
+        else:
+            workspace_device.last_seen_at = received_at
 
         batch = db.get(SyncBatchRecord, (workspace_id, export_id))
         if batch is None:
@@ -141,6 +211,7 @@ def persist_sync_payload(db: Session, payload: SyncPayloadIn, app_version: str |
 def list_metrics(
     db: Session,
     *,
+    workspace_id: str | None = None,
     device_id: str | None = None,
     metric_type: str | None = None,
     start_at: datetime | None = None,
@@ -149,6 +220,8 @@ def list_metrics(
     offset: int = 0,
 ) -> MetricListResponse:
     stmt: Select[tuple[HealthMetricRecord]] = select(HealthMetricRecord)
+    if workspace_id:
+        stmt = stmt.where(HealthMetricRecord.workspace_id == workspace_id)
     if device_id:
         stmt = stmt.where(HealthMetricRecord.device_id == device_id)
     if metric_type:
@@ -165,6 +238,7 @@ def list_metrics(
 def list_workouts(
     db: Session,
     *,
+    workspace_id: str | None = None,
     device_id: str | None = None,
     activity_type: str | None = None,
     start_at: datetime | None = None,
@@ -173,6 +247,8 @@ def list_workouts(
     offset: int = 0,
 ) -> WorkoutListResponse:
     stmt: Select[tuple[HealthWorkoutRecord]] = select(HealthWorkoutRecord)
+    if workspace_id:
+        stmt = stmt.where(HealthWorkoutRecord.workspace_id == workspace_id)
     if device_id:
         stmt = stmt.where(HealthWorkoutRecord.device_id == device_id)
     if activity_type:
@@ -189,16 +265,24 @@ def list_workouts(
 def list_sync_batches(
     db: Session,
     *,
+    workspace_id: str | None = None,
     device_id: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> SyncBatchListResponse:
     stmt: Select[tuple[SyncBatchRecord]] = select(SyncBatchRecord)
+    if workspace_id:
+        stmt = stmt.where(SyncBatchRecord.workspace_id == workspace_id)
     if device_id:
         stmt = stmt.where(SyncBatchRecord.device_id == device_id)
 
     records = db.scalars(stmt.order_by(desc(SyncBatchRecord.received_at)).limit(limit).offset(offset)).all()
     return SyncBatchListResponse(items=[sync_batch_record_to_schema(record) for record in records])
+
+
+def ensure_workspace(db: Session, workspace_id: str, created_at: datetime) -> None:
+    if db.get(WorkspaceRecord, workspace_id) is None:
+        db.add(WorkspaceRecord(id=workspace_id, created_at=created_at, label=None))
 
 
 def metric_record_to_schema(record: HealthMetricRecord) -> HealthMetricOut:

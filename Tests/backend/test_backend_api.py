@@ -177,3 +177,26 @@ def test_hosted_sync_rows_are_workspace_scoped(tmp_path: Path) -> None:
         assert batch.workspace_id == provisioned["workspace_id"]
         assert metric.workspace_id == provisioned["workspace_id"]
         assert workout.workspace_id == provisioned["workspace_id"]
+
+
+def test_hosted_token_capabilities_are_separated(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+    agent_headers = {"Authorization": f"Bearer {provisioned['agent_token']}"}
+
+    upload = client.post("/api/apple-health/sync", headers=ingest_headers, json=sample_payload())
+    assert upload.status_code == 200
+
+    ingest_read = client.get("/api/agent/metrics", headers=ingest_headers)
+    assert ingest_read.status_code == 403
+
+    agent_upload = client.post(
+        "/api/apple-health/sync",
+        headers=agent_headers,
+        json=sample_payload("22222222-2222-4222-8222-222222222222"),
+    )
+    assert agent_upload.status_code == 403
+
+    agent_read = client.get("/api/agent/metrics", headers=agent_headers)
+    assert agent_read.status_code == 200

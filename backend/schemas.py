@@ -55,6 +55,18 @@ class UploadResult(BaseModel):
     duplicates: int
 
 
+class HostedWorkspaceCreate(BaseModel):
+    label: str | None = None
+
+
+class HostedWorkspaceResponse(BaseModel):
+    workspace_id: str
+    backend_url: str
+    ingest_token: str
+    agent_endpoint: str
+    agent_token: str
+
+
 class HealthMetricOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
