@@ -2,14 +2,14 @@
 
 ## Goal
 
-Add an opt-in hosted storage mode where HealthSync can save selected Apple Health data into our database and provide the user with a private read-only endpoint plus auth token for AI agents.
+Add an opt-in hosted storage mode where HealthSync can save selected Apple Health data into our Supabase Postgres database and provide the user with a private read-only endpoint plus auth token for AI agents.
 
 ## Scope
 
 This design extends the existing FastAPI/Postgres backend. It does not replace the self-hosted backend path. Users should be able to choose either:
 
 - My own backend: current backend URL and token flow.
-- Hosted HealthSync storage: our hosted database, workspace-scoped tokens, and a private agent endpoint.
+- Hosted HealthSync storage: our Supabase database, workspace-scoped tokens, and a private agent endpoint.
 
 V1 is token-based and account-ready. It avoids full user accounts now, but its data model leaves room to attach workspaces to accounts later.
 
@@ -18,7 +18,9 @@ V1 is token-based and account-ready. It avoids full user accounts now, but its d
 Use one backend codebase with two modes:
 
 - Self-hosted mode: existing `API_TOKEN` validates upload and read endpoints.
-- Hosted mode: workspace-scoped tokens validate ingest and agent reads.
+- Hosted mode: workspace-scoped tokens validate ingest and agent reads, while the backend writes to Supabase Postgres.
+
+The app and external agents should not connect directly to Supabase. FastAPI remains the API boundary for token verification, workspace scoping, dedupe rules, and response shaping. Supabase is the hosted data store.
 
 Hosted mode adds:
 
@@ -36,6 +38,8 @@ POST /api/apple-health/sync
 The backend determines whether the bearer token is the self-hosted `API_TOKEN` or a hosted `ingest_token`.
 
 ## Data Model
+
+Implement the hosted schema in Supabase Postgres. Use normal SQL migrations so the same table definitions stay portable, but treat Supabase as the production hosted database.
 
 Add `workspaces`:
 
@@ -73,6 +77,8 @@ Update existing tables with `workspace_id`:
 - `health_workouts.workspace_id`
 
 For hosted data, dedupe metric and workout records by `workspace_id + device_id + id`. For legacy self-hosted data, preserve the current `device_id + id` behavior unless a migration converts self-hosted rows into a default workspace.
+
+Enable Supabase Row Level Security on hosted tables when the implementation starts using Supabase Auth or direct client access. In V1, FastAPI is the only trusted writer/reader, so workspace isolation is enforced in backend queries and token validation.
 
 ## Token Rules
 
@@ -189,7 +195,7 @@ V1 does not need revoke/regenerate UI, but backend token revocation should be su
 3. Backend creates workspace, ingest token, and agent read token.
 4. App stores hosted backend URL and ingest token in Keychain.
 5. App uploads selected Apple Health batches with the ingest token.
-6. Backend writes rows under the token's `workspace_id`.
+6. Backend writes rows under the token's `workspace_id` into Supabase Postgres.
 7. User copies private agent endpoint and agent token.
 8. Agent calls read-only endpoint and receives only that workspace's data.
 
@@ -203,6 +209,7 @@ V1 does not need revoke/regenerate UI, but backend token revocation should be su
 - Agent token is read-only.
 - Ingest token is write-only.
 - Production hosted endpoints must use HTTPS.
+- Do not expose Supabase service-role credentials to the app or user agents.
 
 ## Testing
 
@@ -218,6 +225,8 @@ Backend tests should prove:
 - Agent endpoint returns only the token's workspace data.
 - Duplicate HealthKit records dedupe within `workspace_id + device_id + id`.
 - Revoked tokens fail.
+- Supabase writes always include `workspace_id`.
+- Agent endpoints cannot return rows from another Supabase workspace.
 
 App tests should prove:
 
@@ -229,7 +238,7 @@ App tests should prove:
 ## Rollout
 
 1. Backend:
-   - schema migration
+   - Supabase schema migration
    - token hashing and verification
    - hosted provisioning endpoint
    - workspace-scoped persistence
