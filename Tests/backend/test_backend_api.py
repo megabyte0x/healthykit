@@ -10,15 +10,22 @@ from backend.database import create_engine_for_url, create_session_factory
 from backend.models import Base
 
 
-def make_client(tmp_path: Path) -> TestClient:
+def make_client(tmp_path: Path, hosted: bool = False) -> TestClient:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'healthsync.sqlite'}"
     engine = create_engine_for_url(database_url)
     Base.metadata.create_all(engine)
     session_factory = create_session_factory(engine)
     app = create_app(
-        Settings(database_url=database_url, api_token="test-token"),
+        Settings(
+            database_url=database_url,
+            api_token="test-token",
+            token_hash_secret="test-hash-secret",
+            hosted_public_base_url="https://healthsync.example.test",
+            hosted_provisioning_enabled=hosted,
+        ),
         session_factory=session_factory,
     )
+    app.state.session_factory = session_factory
     return TestClient(app)
 
 
@@ -119,3 +126,35 @@ def test_fetch_endpoints_require_token(tmp_path: Path) -> None:
     assert client.get("/api/apple-health/metrics").status_code == 401
     assert client.get("/api/apple-health/workouts").status_code == 401
     assert client.get("/api/apple-health/syncs").status_code == 401
+
+
+def test_hosted_provisioning_returns_tokens_and_stores_hashes(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+
+    response = client.post("/api/hosted/workspaces", json={"label": "Personal Health"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workspace_id"].startswith("wk_")
+    assert body["backend_url"] == "https://healthsync.example.test"
+    assert body["ingest_token"].startswith("hs_ingest_")
+    assert body["agent_token"].startswith("hs_agent_")
+    assert body["agent_endpoint"] == "https://healthsync.example.test/api/agent/health-data"
+
+    with client.app.state.session_factory() as db:
+        from backend.models import AccessTokenRecord
+
+        tokens = db.query(AccessTokenRecord).all()
+        assert len(tokens) == 2
+        assert {token.kind for token in tokens} == {"ingest", "agent_read"}
+        assert all(not token.token_hash.startswith("hs_") for token in tokens)
+        assert all(body["ingest_token"] != token.token_hash for token in tokens)
+        assert all(body["agent_token"] != token.token_hash for token in tokens)
+
+
+def test_hosted_provisioning_can_be_disabled(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=False)
+
+    response = client.post("/api/hosted/workspaces", json={"label": "Personal Health"})
+
+    assert response.status_code == 404
