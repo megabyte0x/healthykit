@@ -17,13 +17,14 @@ Authorization: Bearer <API_TOKEN>
 cp .env.example .env
 ```
 
-2. Generate a token:
+2. Generate two tokens:
 
 ```bash
 python3 -m backend.scripts.generate_token
+python3 -m backend.scripts.generate_token
 ```
 
-3. Paste the token into `.env` as `API_TOKEN`, and replace `POSTGRES_PASSWORD` with a local database password.
+3. In `.env`, replace only these local Docker values: `POSTGRES_PASSWORD`, `API_TOKEN`, and `TOKEN_HASH_SECRET`. Paste the first token as `API_TOKEN`, paste the second token as `TOKEN_HASH_SECRET`, and set `POSTGRES_PASSWORD` to a local database password.
 
 4. Start Postgres and the API:
 
@@ -50,6 +51,7 @@ Use this path for Supabase, Neon, or another hosted Postgres database.
 ```bash
 export DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE'
 export API_TOKEN="$(python3 -m backend.scripts.generate_token)"
+export TOKEN_HASH_SECRET="$(python3 -m backend.scripts.generate_token)"
 ```
 
 4. Install dependencies:
@@ -74,16 +76,57 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8080
 
 For production iPhone sync, deploy this API behind HTTPS and enter the deployed base URL plus `API_TOKEN` in HealthSync settings.
 
+## Hosted Supabase Mode
+
+Use this path when HealthSync should provision separate hosted workspaces with app ingest tokens and private read-only agent tokens. User data is stored in Supabase Postgres through this FastAPI backend. Apps and agents never receive Supabase credentials.
+
+Set the hosted environment:
+
+```bash
+export DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE'
+export API_TOKEN="$(python3 -m backend.scripts.generate_token)"
+export TOKEN_HASH_SECRET="$(python3 -m backend.scripts.generate_token)"
+export HOSTED_PUBLIC_BASE_URL='https://api.example.com'
+export HOSTED_PROVISIONING_ENABLED=true
+```
+
+Run migrations and start the API:
+
+```bash
+alembic upgrade head
+uvicorn backend.main:app --host 0.0.0.0 --port 8080
+```
+
+Provision a workspace:
+
+```bash
+curl -X POST "$HOSTED_PUBLIC_BASE_URL/api/hosted/workspaces" \
+  -H "Content-Type: application/json" \
+  -d '{"label":"Personal Health"}'
+```
+
+The response includes `workspace_id`, `backend_url`, `ingest_token`, `agent_endpoint`, and `agent_token`. Configure the iOS app with `backend_url` and `ingest_token`. Save both tokens securely, and give AI agents only `agent_endpoint` and `agent_token`.
+
+Read aggregated health data from the private agent endpoint:
+
+```bash
+curl -H "Authorization: Bearer $AGENT_TOKEN" \
+  "$HOSTED_PUBLIC_BASE_URL/api/agent/health-data"
+```
+
 ## Tables
 
 The migration creates:
 
+- `workspaces`
+- `workspace_devices`
+- `access_tokens`
 - `devices`
 - `sync_batches`
 - `health_metrics`
 - `health_workouts`
 
-Metric and workout rows are unique by `device_id` plus HealthKit record `id`, so app retries are safe.
+Metric and workout rows are unique by `workspace_id`, `device_id`, and HealthKit record `id`, so app retries are safe without mixing hosted workspaces.
 
 ## API
 
@@ -112,6 +155,13 @@ List workouts:
 ```bash
 curl -H "Authorization: Bearer $API_TOKEN" \
   "http://127.0.0.1:8080/api/apple-health/workouts?device_id=device-1"
+```
+
+Agent read endpoint:
+
+```bash
+curl -H "Authorization: Bearer $AGENT_TOKEN" \
+  "https://api.example.com/api/agent/health-data"
 ```
 
 Post a minimal sync payload:

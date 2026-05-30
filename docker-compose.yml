@@ -20,8 +20,11 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-healthsync}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-healthsync}
       API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env}
+      TOKEN_HASH_SECRET: ${TOKEN_HASH_SECRET:?Set TOKEN_HASH_SECRET in .env}
+      HOSTED_PUBLIC_BASE_URL: ${HOSTED_PUBLIC_BASE_URL:-}
+      HOSTED_PROVISIONING_ENABLED: ${HOSTED_PROVISIONING_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy

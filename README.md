@@ -79,15 +79,17 @@ cp .env.example .env
 python3 -m backend.scripts.generate_token
 ```
 
-Paste the generated token into `.env` as `API_TOKEN`, then run:
+In `.env`, replace only these local Docker values: `POSTGRES_PASSWORD`, `API_TOKEN`, and `TOKEN_HASH_SECRET`. Paste the generated token as `API_TOKEN`, run the generator again, paste the second token as `TOKEN_HASH_SECRET`, then run:
 
 ```bash
 docker compose up --build
 ```
 
-Also replace `POSTGRES_PASSWORD` in `.env` before using the stack beyond local testing. Use `http://127.0.0.1:8080` from the simulator. For a real iPhone, use a private HTTPS endpoint reachable from the phone, or use your Mac's LAN address for same-Wi-Fi testing.
+Use `http://127.0.0.1:8080` from the simulator. For a real iPhone, use a private HTTPS endpoint reachable from the phone, or use your Mac's LAN address for same-Wi-Fi testing.
 
-For Supabase, Neon, or another managed Postgres database, set `DATABASE_URL` and `API_TOKEN`, run `alembic upgrade head`, and deploy `uvicorn backend.main:app`. See `backend/README.md` for the full setup and fetch API examples.
+For hosted HealthSync on Supabase Postgres, deploy the FastAPI backend with `DATABASE_URL`, `API_TOKEN`, `TOKEN_HASH_SECRET`, `HOSTED_PUBLIC_BASE_URL`, and `HOSTED_PROVISIONING_ENABLED=true`. The backend provisions HealthSync workspaces and returns an app ingest token plus a private read-only agent endpoint/token. The app's hosted setup flow uses the hosted backend URL and ingest token; AI agents should receive only the agent endpoint and agent token, never Supabase credentials.
+
+For Supabase, Neon, or another managed Postgres database without hosted provisioning, set `DATABASE_URL`, `API_TOKEN`, and `TOKEN_HASH_SECRET`, run `alembic upgrade head`, and deploy `uvicorn backend.main:app`. See `backend/README.md` for the full setup, hosted provisioning, and fetch API examples.
 
 ## Backend Stub
 

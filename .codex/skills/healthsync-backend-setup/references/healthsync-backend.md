@@ -7,7 +7,7 @@ For an implementation repo, expect or create:
 - `backend/app.py`: FastAPI routes and auth dependency.
 - `backend/config.py`: `DATABASE_URL` and `API_TOKEN` settings.
 - `backend/database.py`: SQLAlchemy engine and session helpers.
-- `backend/models.py`: devices, sync batches, metrics, workouts.
+- `backend/models.py`: workspaces, access tokens, devices, sync batches, metrics, workouts.
 - `backend/schemas.py`: Pydantic payload and response models.
 - `backend/repository.py`: persistence and fetch queries.
 - `backend/main.py`: `uvicorn backend.main:app` entrypoint.
@@ -40,6 +40,18 @@ GET /api/apple-health/syncs
 
 All `/api/apple-health/*` endpoints require the bearer token.
 
+Hosted mode also uses:
+
+```text
+POST /api/hosted/workspaces
+GET /api/agent/health-data
+GET /api/agent/metrics
+GET /api/agent/workouts
+GET /api/agent/syncs
+```
+
+`/api/hosted/workspaces` is enabled only when `HOSTED_PROVISIONING_ENABLED=true`. `/api/agent/*` endpoints require a read-only agent bearer token and must not accept the ingest token or self-hosted admin token.
+
 ## Database Schema
 
 `devices`
@@ -49,9 +61,32 @@ All `/api/apple-health/*` endpoints require the bearer token.
 - `last_seen_at`
 - `app_version`
 
+`workspaces`
+
+- `id` primary key
+- `created_at`
+- `label`
+
+`workspace_devices`
+
+- composite primary key: `workspace_id`, `device_id`
+- `created_at`
+- `last_seen_at`
+- `label`
+
+`access_tokens`
+
+- `id` primary key
+- `workspace_id`
+- `kind` (`ingest` or `agent_read`)
+- `token_hash`
+- `created_at`
+- `last_used_at`
+- `revoked_at`
+
 `sync_batches`
 
-- `export_id` primary key
+- composite primary key: `workspace_id`, `export_id`
 - `device_id`
 - `generated_at`
 - `received_at`
@@ -65,7 +100,7 @@ All `/api/apple-health/*` endpoints require the bearer token.
 
 `health_metrics`
 
-- composite primary key: `device_id`, `id`
+- composite primary key: `workspace_id`, `device_id`, `id`
 - `type`
 - `value`
 - `unit`
@@ -78,7 +113,7 @@ All `/api/apple-health/*` endpoints require the bearer token.
 
 `health_workouts`
 
-- composite primary key: `device_id`, `id`
+- composite primary key: `workspace_id`, `device_id`, `id`
 - `activity_type`
 - `start_at`
 - `end_at`
@@ -96,8 +131,10 @@ All `/api/apple-health/*` endpoints require the bearer token.
 Use these names consistently:
 
 ```text
-DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
 API_TOKEN=<long-random-token>
+TOKEN_HASH_SECRET=<long-random-hmac-secret>
+HOSTED_PUBLIC_BASE_URL=https://api.example.com
+HOSTED_PROVISIONING_ENABLED=false
 POSTGRES_DB=healthsync
 POSTGRES_USER=healthsync
 POSTGRES_PASSWORD=<local-db-password>
@@ -107,6 +144,10 @@ API_HOST_PORT=8080
 
 Do not commit `.env`.
 
+Docker Compose constructs `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`. For managed Postgres or manual deployments, set `DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE` explicitly outside Compose.
+
+`TOKEN_HASH_SECRET` is required because hosted ingest and agent tokens are stored as HMAC hashes. `HOSTED_PUBLIC_BASE_URL` is required when hosted provisioning is enabled so provisioning responses can return stable app and agent URLs.
+
 ## User Setup: Docker Or Self-Hosted
 
 Tell the user:
@@ -114,9 +155,10 @@ Tell the user:
 ```bash
 cp .env.example .env
 python3 -m backend.scripts.generate_token
+python3 -m backend.scripts.generate_token
 ```
 
-Then instruct them to paste the generated token into `.env` as `API_TOKEN`, replace `POSTGRES_PASSWORD`, and run:
+Then instruct them to replace only these local Docker values in `.env`: `POSTGRES_PASSWORD`, `API_TOKEN`, and `TOKEN_HASH_SECRET`. The first generated token is `API_TOKEN`; the second is `TOKEN_HASH_SECRET`. Then run:
 
 ```bash
 docker compose up --build
@@ -129,7 +171,45 @@ App settings:
 - Production iPhone backend URL: HTTPS URL only
 - Auth token: same value as backend `API_TOKEN`
 
-## User Setup: Supabase Or Neon
+## User Setup: Hosted Supabase Mode
+
+Hosted mode stores user data in Supabase Postgres through the FastAPI backend. Apps and AI agents never receive Supabase credentials. The app gets an ingest token for upload, and AI agents get a private read-only agent endpoint plus agent token.
+
+Set required hosted env vars where the FastAPI backend runs:
+
+```bash
+export DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE'
+export API_TOKEN='<self-hosted-admin-token>'
+export TOKEN_HASH_SECRET='<long-random-hmac-secret>'
+export HOSTED_PUBLIC_BASE_URL='https://api.example.com'
+export HOSTED_PROVISIONING_ENABLED=true
+```
+
+Run migrations and start the API:
+
+```bash
+alembic upgrade head
+uvicorn backend.main:app --host 0.0.0.0 --port 8080
+```
+
+Provision a workspace:
+
+```bash
+curl -X POST "$HOSTED_PUBLIC_BASE_URL/api/hosted/workspaces" \
+  -H "Content-Type: application/json" \
+  -d '{"label":"Personal Health"}'
+```
+
+The response includes `workspace_id`, `backend_url`, `ingest_token`, `agent_endpoint`, and `agent_token`. Save ingest and agent tokens securely. Give the iOS app only the hosted backend URL plus ingest token. Give AI agents only the agent endpoint plus agent token.
+
+Agent read example:
+
+```bash
+curl -H "Authorization: Bearer $AGENT_TOKEN" \
+  "$HOSTED_PUBLIC_BASE_URL/api/agent/health-data"
+```
+
+## User Setup: Managed Postgres Without Hosted Provisioning
 
 Tell the user:
 
@@ -140,6 +220,7 @@ Tell the user:
 ```bash
 export DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE'
 export API_TOKEN="$(python3 -m backend.scripts.generate_token)"
+export TOKEN_HASH_SECRET="$(python3 -m backend.scripts.generate_token)"
 ```
 
 4. Install and migrate:
