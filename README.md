@@ -81,6 +81,14 @@ uvicorn backend_stub.main:app --host 0.0.0.0 --port 8080
 
 Use `http://127.0.0.1:8080` from the simulator. For real-device testing, use a private HTTPS endpoint reachable from the phone.
 
+For a real iPhone on the same Wi-Fi as this Mac, use the Mac's LAN address instead, for example:
+
+```text
+http://192.168.1.24:8080
+```
+
+iOS may ask for Local Network access the first time the app connects to a LAN backend. Allow it for local testing.
+
 ## App Setup
 
 1. Launch the app.
