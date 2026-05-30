@@ -267,6 +267,8 @@ def list_sync_batches(
     *,
     workspace_id: str | None = None,
     device_id: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> SyncBatchListResponse:
@@ -275,6 +277,10 @@ def list_sync_batches(
         stmt = stmt.where(SyncBatchRecord.workspace_id == workspace_id)
     if device_id:
         stmt = stmt.where(SyncBatchRecord.device_id == device_id)
+    if start_at:
+        stmt = stmt.where(SyncBatchRecord.date_range_end >= start_at)
+    if end_at:
+        stmt = stmt.where(SyncBatchRecord.date_range_start <= end_at)
 
     records = db.scalars(stmt.order_by(desc(SyncBatchRecord.received_at)).limit(limit).offset(offset)).all()
     return SyncBatchListResponse(items=[sync_batch_record_to_schema(record) for record in records])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -200,3 +201,71 @@ def test_hosted_token_capabilities_are_separated(tmp_path: Path) -> None:
 
     agent_read = client.get("/api/agent/metrics", headers=agent_headers)
     assert agent_read.status_code == 200
+
+
+def test_agent_endpoint_returns_only_own_workspace_data(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    first = client.post("/api/hosted/workspaces", json={"label": "First"}).json()
+    second = client.post("/api/hosted/workspaces", json={"label": "Second"}).json()
+
+    client.post("/api/apple-health/sync", headers={"Authorization": f"Bearer {first['ingest_token']}"}, json=sample_payload())
+    client.post(
+        "/api/apple-health/sync",
+        headers={"Authorization": f"Bearer {second['ingest_token']}"},
+        json=sample_payload("22222222-2222-4222-8222-222222222222"),
+    )
+
+    response = client.get("/api/agent/health-data", headers={"Authorization": f"Bearer {first['agent_token']}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workspace_id"] == first["workspace_id"]
+    assert [item["export_id"] for item in body["syncs"]] == ["11111111-1111-4111-8111-111111111111"]
+
+
+def test_agent_health_data_filters_metrics_by_type(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    step_payload = sample_payload()
+    heart_rate_payload = deepcopy(sample_payload("22222222-2222-4222-8222-222222222222"))
+    heart_rate_payload["device_id"] = "device-2"
+    heart_rate_payload["metrics"][0]["id"] = "healthkit:metric-2"
+    heart_rate_payload["metrics"][0]["type"] = "heartRate"
+
+    client.post("/api/apple-health/sync", headers=headers, json=step_payload)
+    client.post("/api/apple-health/sync", headers=headers, json=heart_rate_payload)
+
+    response = client.get(
+        "/api/agent/health-data?type=heartRate",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert [item["type"] for item in response.json()["metrics"]] == ["heartRate"]
+
+
+def test_agent_health_data_filters_syncs_by_requested_range(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    in_range_payload = sample_payload()
+    out_of_range_payload = deepcopy(sample_payload("22222222-2222-4222-8222-222222222222"))
+    out_of_range_payload["generated_at"] = "2026-04-15T10:00:00.000Z"
+    out_of_range_payload["date_range"] = {
+        "start": "2026-04-14T10:00:00.000Z",
+        "end": "2026-04-15T10:00:00.000Z",
+    }
+
+    client.post("/api/apple-health/sync", headers=headers, json=in_range_payload)
+    client.post("/api/apple-health/sync", headers=headers, json=out_of_range_payload)
+
+    response = client.get(
+        "/api/agent/health-data?from=2026-05-01T00:00:00.000Z&to=2026-05-31T23:59:59.000Z",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert [item["export_id"] for item in response.json()["syncs"]] == ["11111111-1111-4111-8111-111111111111"]

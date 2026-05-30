@@ -67,6 +67,13 @@ class HostedWorkspaceResponse(BaseModel):
     agent_token: str
 
 
+class AgentRange(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_at: datetime | None = Field(default=None, alias="from")
+    to: datetime | None = None
+
+
 class HealthMetricOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,3 +132,11 @@ class WorkoutListResponse(BaseModel):
 
 class SyncBatchListResponse(BaseModel):
     items: list[SyncBatchOut]
+
+
+class AgentHealthDataResponse(BaseModel):
+    workspace_id: str
+    range: AgentRange
+    metrics: list[HealthMetricOut]
+    workouts: list[HealthWorkoutOut]
+    syncs: list[SyncBatchOut]

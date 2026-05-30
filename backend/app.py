@@ -19,6 +19,8 @@ from .repository import (
     provision_hosted_workspace,
 )
 from .schemas import (
+    AgentHealthDataResponse,
+    AgentRange,
     HostedWorkspaceCreate,
     HostedWorkspaceResponse,
     MetricListResponse,
@@ -151,8 +153,8 @@ def create_app(
         auth: AuthContext = Depends(require_agent_auth),
         db: Session = Depends(get_db),
         metric_type: str | None = Query(default=None, alias="type"),
-        start_at: datetime | None = None,
-        end_at: datetime | None = None,
+        from_at: datetime | None = Query(default=None, alias="from"),
+        to: datetime | None = None,
         limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
         offset: int = Query(default=0, ge=0),
     ) -> MetricListResponse:
@@ -160,10 +162,83 @@ def create_app(
             db,
             workspace_id=auth.workspace_id,
             metric_type=metric_type,
-            start_at=start_at,
-            end_at=end_at,
+            start_at=from_at,
+            end_at=to,
             limit=limit,
             offset=offset,
+        )
+
+    @app.get("/api/agent/workouts", response_model=WorkoutListResponse)
+    def agent_workouts(
+        auth: AuthContext = Depends(require_agent_auth),
+        db: Session = Depends(get_db),
+        activity_type: str | None = None,
+        from_at: datetime | None = Query(default=None, alias="from"),
+        to: datetime | None = None,
+        limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
+        offset: int = Query(default=0, ge=0),
+    ) -> WorkoutListResponse:
+        return list_workouts(
+            db,
+            workspace_id=auth.workspace_id,
+            activity_type=activity_type,
+            start_at=from_at,
+            end_at=to,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.get("/api/agent/syncs", response_model=SyncBatchListResponse)
+    def agent_syncs(
+        auth: AuthContext = Depends(require_agent_auth),
+        db: Session = Depends(get_db),
+        device_id: str | None = None,
+        limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
+        offset: int = Query(default=0, ge=0),
+    ) -> SyncBatchListResponse:
+        return list_sync_batches(db, workspace_id=auth.workspace_id, device_id=device_id, limit=limit, offset=offset)
+
+    @app.get("/api/agent/health-data", response_model=AgentHealthDataResponse)
+    def agent_health_data(
+        auth: AuthContext = Depends(require_agent_auth),
+        db: Session = Depends(get_db),
+        metric_type: str | None = Query(default=None, alias="type"),
+        from_at: datetime | None = Query(default=None, alias="from"),
+        to: datetime | None = None,
+        limit: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size),
+        offset: int = Query(default=0, ge=0),
+    ) -> AgentHealthDataResponse:
+        metrics = list_metrics(
+            db,
+            workspace_id=auth.workspace_id,
+            metric_type=metric_type,
+            start_at=from_at,
+            end_at=to,
+            limit=limit,
+            offset=offset,
+        )
+        workouts = list_workouts(
+            db,
+            workspace_id=auth.workspace_id,
+            start_at=from_at,
+            end_at=to,
+            limit=limit,
+            offset=offset,
+        )
+        syncs = list_sync_batches(
+            db,
+            workspace_id=auth.workspace_id,
+            start_at=from_at,
+            end_at=to,
+            limit=limit,
+            offset=offset,
+        )
+        return AgentHealthDataResponse(
+            workspace_id=auth.workspace_id,
+            range=AgentRange(from_at=from_at, to=to),
+            metrics=metrics.items,
+            workouts=workouts.items,
+            syncs=syncs.items,
         )
 
     return app
