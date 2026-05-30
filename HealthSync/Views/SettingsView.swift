@@ -15,6 +15,81 @@ struct SupportDevelopmentPrompt: Equatable {
     )
 }
 
+enum HostedStorageFeedbackKind: Equatable {
+    case none
+    case info
+    case success
+    case error
+}
+
+struct HostedStorageSetupPresentation: Equatable {
+    let isBusy: Bool
+    let backendURL: String
+    let lastError: String?
+    let hostedAgentEndpoint: String?
+    let hostedAgentToken: String
+
+    var createButtonTitle: String {
+        isBusy ? "Creating Hosted Storage..." : "Create Hosted Storage"
+    }
+
+    var createButtonSystemImage: String {
+        isBusy ? "hourglass" : "externaldrive.badge.plus"
+    }
+
+    var isCreateButtonDisabled: Bool {
+        isBusy || trimmedBackendURL.isEmpty
+    }
+
+    var progressMessage: String? {
+        isBusy ? "Creating hosted storage..." : nil
+    }
+
+    var feedbackMessage: String? {
+        if let errorMessage = trimmed(lastError), !errorMessage.isEmpty {
+            return errorMessage
+        }
+
+        if hasAgentAccess {
+            return "Hosted storage is ready."
+        }
+
+        if trimmedBackendURL.isEmpty {
+            return "Enter the hosted backend URL before creating storage."
+        }
+
+        return nil
+    }
+
+    var feedbackKind: HostedStorageFeedbackKind {
+        if let errorMessage = trimmed(lastError), !errorMessage.isEmpty {
+            return .error
+        }
+
+        if hasAgentAccess {
+            return .success
+        }
+
+        if trimmedBackendURL.isEmpty {
+            return .info
+        }
+
+        return .none
+    }
+
+    private var trimmedBackendURL: String {
+        trimmed(backendURL) ?? ""
+    }
+
+    private var hasAgentAccess: Bool {
+        !(trimmed(hostedAgentEndpoint) ?? "").isEmpty || !(trimmed(hostedAgentToken) ?? "").isEmpty
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @State private var isSupportPromptPresented = false
@@ -30,14 +105,32 @@ struct SettingsView: View {
                     }
 
                     if appState.settings.storageMode == .hostedHealthSync {
+                        let presentation = hostedStoragePresentation
+
                         Text("Your selected Apple Health data will be uploaded to HealthSync-hosted storage and made available through a private read-only endpoint.")
                             .foregroundStyle(.secondary)
+
+                        if let progressMessage = presentation.progressMessage {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text(progressMessage)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let feedbackMessage = presentation.feedbackMessage {
+                            Text(feedbackMessage)
+                                .font(.footnote)
+                                .foregroundStyle(presentation.feedbackKind.color)
+                        }
 
                         Button {
                             Task { await appState.createHostedStorage() }
                         } label: {
-                            Label("Create Hosted Storage", systemImage: "externaldrive.badge.plus")
+                            Label(presentation.createButtonTitle, systemImage: presentation.createButtonSystemImage)
                         }
+                        .disabled(presentation.isCreateButtonDisabled)
+                        .accessibilityIdentifier("create-hosted-storage-button")
                     }
                 }
 
@@ -148,12 +241,35 @@ struct SettingsView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    private var hostedStoragePresentation: HostedStorageSetupPresentation {
+        HostedStorageSetupPresentation(
+            isBusy: appState.isBusy,
+            backendURL: appState.settings.backendURL,
+            lastError: appState.lastError,
+            hostedAgentEndpoint: appState.settings.hostedAgentEndpoint,
+            hostedAgentToken: appState.hostedAgentToken
+        )
+    }
+
     private var hasAgentAccess: Bool {
         !hostedAgentEndpoint.isEmpty || !appState.hostedAgentToken.isEmpty
     }
 
     private func copyToPasteboard(_ value: String) {
         UIPasteboard.general.string = value
+    }
+}
+
+private extension HostedStorageFeedbackKind {
+    var color: Color {
+        switch self {
+        case .none, .info:
+            .secondary
+        case .success:
+            .green
+        case .error:
+            .red
+        }
     }
 }
 

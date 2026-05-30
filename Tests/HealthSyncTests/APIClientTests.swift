@@ -64,3 +64,61 @@ final class SupportDevelopmentPromptTests: XCTestCase {
         )
     }
 }
+
+final class HostedStorageSetupPresentationTests: XCTestCase {
+    func testCreatingStateShowsProgressAndDisablesCreateButton() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: true,
+            backendURL: "https://api.example.com",
+            lastError: nil,
+            hostedAgentEndpoint: nil,
+            hostedAgentToken: ""
+        )
+
+        XCTAssertEqual(presentation.createButtonTitle, "Creating Hosted Storage...")
+        XCTAssertEqual(presentation.progressMessage, "Creating hosted storage...")
+        XCTAssertTrue(presentation.isCreateButtonDisabled)
+        XCTAssertNil(presentation.feedbackMessage)
+    }
+
+    func testProvisioningErrorIsVisibleToTheUser() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "https://api.example.com",
+            lastError: "Network unavailable or server temporarily unavailable.",
+            hostedAgentEndpoint: nil,
+            hostedAgentToken: ""
+        )
+
+        XCTAssertEqual(presentation.feedbackMessage, "Network unavailable or server temporarily unavailable.")
+        XCTAssertEqual(presentation.feedbackKind, .error)
+        XCTAssertFalse(presentation.isCreateButtonDisabled)
+    }
+
+    func testMissingHostedBackendURLExplainsWhyCreateIsDisabled() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "   ",
+            lastError: nil,
+            hostedAgentEndpoint: nil,
+            hostedAgentToken: ""
+        )
+
+        XCTAssertTrue(presentation.isCreateButtonDisabled)
+        XCTAssertEqual(presentation.feedbackMessage, "Enter the hosted backend URL before creating storage.")
+        XCTAssertEqual(presentation.feedbackKind, .info)
+    }
+
+    func testReadyStateShowsHostedStorageSuccess() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "https://api.example.com",
+            lastError: nil,
+            hostedAgentEndpoint: "https://api.example.com/api/agent/health-data",
+            hostedAgentToken: ""
+        )
+
+        XCTAssertEqual(presentation.feedbackMessage, "Hosted storage is ready.")
+        XCTAssertEqual(presentation.feedbackKind, .success)
+    }
+}
