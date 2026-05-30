@@ -22,6 +22,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Storage") {
+                    Picker("Storage", selection: $appState.settings.storageMode) {
+                        ForEach(StorageMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+
+                    if appState.settings.storageMode == .hostedHealthSync {
+                        Text("Your selected Apple Health data will be uploaded to HealthSync-hosted storage and made available through a private read-only endpoint.")
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            Task { await appState.createHostedStorage() }
+                        } label: {
+                            Label("Create Hosted Storage", systemImage: "externaldrive.badge.plus")
+                        }
+                    }
+                }
+
                 Section("Backend") {
                     TextField("https://api.example.com", text: $appState.settings.backendURL)
                         .textInputAutocapitalization(.never)
@@ -42,6 +61,31 @@ struct SettingsView: View {
                         Task { await appState.testConnection() }
                     } label: {
                         Label("Test connection", systemImage: "network")
+                    }
+                }
+
+                if appState.settings.storageMode == .hostedHealthSync && hasAgentAccess {
+                    Section("Agent Access") {
+                        if !hostedAgentEndpoint.isEmpty {
+                            Button {
+                                copyToPasteboard(hostedAgentEndpoint)
+                            } label: {
+                                Label("Copy agent endpoint", systemImage: "doc.on.doc")
+                            }
+
+                            Text(hostedAgentEndpoint)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(4)
+                        }
+
+                        if !appState.hostedAgentToken.isEmpty {
+                            Button {
+                                copyToPasteboard(appState.hostedAgentToken)
+                            } label: {
+                                Label("Copy read-only agent token", systemImage: "key")
+                            }
+                        }
                     }
                 }
 
@@ -97,6 +141,19 @@ struct SettingsView: View {
                 SupportDevelopmentSheet(prompt: .current)
             }
         }
+    }
+
+    private var hostedAgentEndpoint: String {
+        appState.settings.hostedAgentEndpoint?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var hasAgentAccess: Bool {
+        !hostedAgentEndpoint.isEmpty || !appState.hostedAgentToken.isEmpty
+    }
+
+    private func copyToPasteboard(_ value: String) {
+        UIPasteboard.general.string = value
     }
 }
 
