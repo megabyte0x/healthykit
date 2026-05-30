@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var logs: [SyncLogEntry] = []
     @Published var permissionSummary = "Not requested"
     @Published var authTokenDraft = ""
+    @Published var hostedAgentToken = ""
     @Published var hasStoredToken = false
     @Published var isBusy = false
     @Published var backfillProgress = 0.0
@@ -27,7 +28,8 @@ final class AppState: ObservableObject {
             store = localStore
             syncEngine = SyncEngine(store: localStore)
             settings = try await localStore.loadSettings()
-            hasStoredToken = !(try keychain.readToken() ?? "").isEmpty
+            hasStoredToken = try hasTokenForCurrentStorageMode()
+            hostedAgentToken = try keychain.readHostedAgentToken() ?? ""
             shouldShowOnboarding = !settings.hasRequestedHealthPermissions
             permissionSummary = healthKit.isHealthDataAvailable
                 ? (settings.hasRequestedHealthPermissions ? "Requested" : "Not requested")
@@ -79,6 +81,25 @@ final class AppState: ObservableObject {
                 hasStoredToken = true
             }
             startObserversIfPossible()
+            restartPeriodicSync()
+        }
+    }
+
+    func createHostedStorage() async {
+        await runBusy {
+            let response = try await APIClient(maxAttempts: 1).provisionHostedWorkspace(
+                baseURL: settings.backendURL,
+                label: "Personal Health"
+            )
+            settings.storageMode = .hostedHealthSync
+            settings.backendURL = response.backendURL
+            settings.hostedWorkspaceID = response.workspaceID
+            settings.hostedAgentEndpoint = response.agentEndpoint
+            try keychain.saveHostedIngestToken(response.ingestToken)
+            try keychain.saveHostedAgentToken(response.agentToken)
+            hostedAgentToken = response.agentToken
+            hasStoredToken = true
+            try await saveSettingsOnly()
             restartPeriodicSync()
         }
     }
@@ -189,7 +210,7 @@ final class AppState: ObservableObject {
 
     private func uploadConfiguration() async throws -> UploadConfiguration {
         guard let store else { throw APIClientError.invalidResponse }
-        guard let token = try keychain.readToken(), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let token = try readUploadToken(), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw APIClientError.missingToken
         }
         return UploadConfiguration(
@@ -198,6 +219,20 @@ final class AppState: ObservableObject {
             deviceID: try await store.deviceID(),
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         )
+    }
+
+    private func readUploadToken() throws -> String? {
+        switch settings.storageMode {
+        case .customBackend:
+            try keychain.readToken()
+        case .hostedHealthSync:
+            try keychain.readHostedIngestToken()
+        }
+    }
+
+    private func hasTokenForCurrentStorageMode() throws -> Bool {
+        let token = try readUploadToken()
+        return !(token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func startObserversIfPossible() {

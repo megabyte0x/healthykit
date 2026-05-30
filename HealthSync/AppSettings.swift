@@ -24,11 +24,38 @@ enum SyncFrequency: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum StorageMode: String, CaseIterable, Codable, Identifiable {
+    case customBackend
+    case hostedHealthSync
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .customBackend: "My own backend"
+        case .hostedHealthSync: "Hosted HealthSync storage"
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var backendURL: String
     var selectedTypes: Set<HealthDataType>
     var syncFrequency: SyncFrequency
     var hasRequestedHealthPermissions: Bool
+    var storageMode: StorageMode
+    var hostedWorkspaceID: String?
+    var hostedAgentEndpoint: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case backendURL
+        case selectedTypes
+        case syncFrequency
+        case hasRequestedHealthPermissions
+        case storageMode
+        case hostedWorkspaceID
+        case hostedAgentEndpoint
+    }
 
     static let `default` = AppSettings(
         backendURL: "",
@@ -45,8 +72,40 @@ struct AppSettings: Codable, Equatable {
             .workouts
         ],
         syncFrequency: .manualOnly,
-        hasRequestedHealthPermissions: false
+        hasRequestedHealthPermissions: false,
+        storageMode: .customBackend,
+        hostedWorkspaceID: nil,
+        hostedAgentEndpoint: nil
     )
+
+    init(
+        backendURL: String,
+        selectedTypes: Set<HealthDataType>,
+        syncFrequency: SyncFrequency,
+        hasRequestedHealthPermissions: Bool,
+        storageMode: StorageMode,
+        hostedWorkspaceID: String?,
+        hostedAgentEndpoint: String?
+    ) {
+        self.backendURL = backendURL
+        self.selectedTypes = selectedTypes
+        self.syncFrequency = syncFrequency
+        self.hasRequestedHealthPermissions = hasRequestedHealthPermissions
+        self.storageMode = storageMode
+        self.hostedWorkspaceID = hostedWorkspaceID
+        self.hostedAgentEndpoint = hostedAgentEndpoint
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        backendURL = try container.decode(String.self, forKey: .backendURL)
+        selectedTypes = try container.decode(Set<HealthDataType>.self, forKey: .selectedTypes)
+        syncFrequency = try container.decode(SyncFrequency.self, forKey: .syncFrequency)
+        hasRequestedHealthPermissions = try container.decode(Bool.self, forKey: .hasRequestedHealthPermissions)
+        storageMode = try container.decodeIfPresent(StorageMode.self, forKey: .storageMode) ?? .customBackend
+        hostedWorkspaceID = try container.decodeIfPresent(String.self, forKey: .hostedWorkspaceID)
+        hostedAgentEndpoint = try container.decodeIfPresent(String.self, forKey: .hostedAgentEndpoint)
+    }
 }
 
 struct SyncStatus: Equatable {

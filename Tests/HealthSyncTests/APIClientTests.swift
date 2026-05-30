@@ -36,6 +36,18 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(String(describing: APIClientError.authRejected).contains("secret-token"))
         XCTAssertFalse(APIClientError.authRejected.userMessage.contains("secret-token"))
     }
+
+    func testClientBuildsHostedProvisioningRequest() throws {
+        let request = try APIClient.makeHostedWorkspaceRequest(
+            baseURL: "https://api.example.com",
+            label: "Personal Health"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/api/hosted/workspaces")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(String(data: request.httpBody ?? Data(), encoding: .utf8), #"{"label":"Personal Health"}"#)
+    }
 }
 
 final class SupportDevelopmentPromptTests: XCTestCase {

@@ -47,6 +47,26 @@ struct UploadConfiguration: Equatable {
     let appVersion: String
 }
 
+struct HostedWorkspaceProvisioningResponse: Codable, Equatable {
+    let workspaceID: String
+    let backendURL: String
+    let ingestToken: String
+    let agentEndpoint: String
+    let agentToken: String
+
+    private enum CodingKeys: String, CodingKey {
+        case workspaceID = "workspace_id"
+        case backendURL = "backend_url"
+        case ingestToken = "ingest_token"
+        case agentEndpoint = "agent_endpoint"
+        case agentToken = "agent_token"
+    }
+}
+
+struct HostedWorkspaceProvisioningRequest: Codable {
+    let label: String?
+}
+
 protocol SyncUploading {
     func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult
 }
@@ -80,18 +100,9 @@ final class APIClient: SyncUploading {
         appVersion: String,
         payload: SyncPayload
     ) throws -> URLRequest {
-        let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedURL.isEmpty else { throw APIClientError.missingBackendURL }
         guard !trimmedToken.isEmpty else { throw APIClientError.missingToken }
-        guard
-            let rootURL = URL(string: trimmedURL),
-            let scheme = rootURL.scheme?.lowercased(),
-            ["http", "https"].contains(scheme),
-            rootURL.host != nil
-        else {
-            throw APIClientError.invalidBackendURL
-        }
+        let rootURL = try validatedRootURL(from: baseURL)
 
         let endpoint = rootURL
             .appendingPathComponent("api")
@@ -105,6 +116,21 @@ final class APIClient: SyncUploading {
         request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id")
         request.setValue(appVersion, forHTTPHeaderField: "X-App-Version")
         request.httpBody = try PayloadJSON.encoder.encode(payload)
+        return request
+    }
+
+    static func makeHostedWorkspaceRequest(baseURL: String, label: String?) throws -> URLRequest {
+        let rootURL = try validatedRootURL(from: baseURL)
+        let endpoint = rootURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("hosted")
+            .appendingPathComponent("workspaces")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(HostedWorkspaceProvisioningRequest(label: label))
         return request
     }
 
@@ -164,8 +190,43 @@ final class APIClient: SyncUploading {
         throw lastTransientError
     }
 
+    func provisionHostedWorkspace(baseURL: String, label: String?) async throws -> HostedWorkspaceProvisioningResponse {
+        let request = try Self.makeHostedWorkspaceRequest(baseURL: baseURL, label: label)
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        switch Self.classify(statusCode: httpResponse.statusCode) {
+        case .accepted:
+            do {
+                return try JSONDecoder().decode(HostedWorkspaceProvisioningResponse.self, from: data)
+            } catch {
+                throw APIClientError.invalidResponse
+            }
+        case .authError:
+            throw APIClientError.authRejected
+        case .transient, .permanent:
+            throw APIClientError.serverRejected(httpResponse.statusCode)
+        }
+    }
+
     private func sleepBeforeRetry(attempt: Int) async throws {
         let delay = UInt64(pow(2.0, Double(attempt)) * 250_000_000)
         try await Task.sleep(nanoseconds: delay)
+    }
+
+    private static func validatedRootURL(from baseURL: String) throws -> URL {
+        let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty else { throw APIClientError.missingBackendURL }
+        guard
+            let rootURL = URL(string: trimmedURL),
+            let scheme = rootURL.scheme?.lowercased(),
+            ["http", "https"].contains(scheme),
+            rootURL.host != nil
+        else {
+            throw APIClientError.invalidBackendURL
+        }
+        return rootURL
     }
 }
