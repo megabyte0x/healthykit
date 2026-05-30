@@ -1,4 +1,0 @@
-interface:
-  display_name: "HealthSync Backend Setup"
-  short_description: "Set up persistent HealthSync storage"
-  default_prompt: "Use $healthsync-backend-setup to configure persistent backend storage for this HealthSync app."

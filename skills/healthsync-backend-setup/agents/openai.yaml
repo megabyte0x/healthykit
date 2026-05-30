@@ -1,0 +1,4 @@
+interface:
+  display_name: "HealthSync Backend Setup"
+  short_description: "Set up self-hosted or hosted HealthSync storage"
+  default_prompt: "Use $healthsync-backend-setup to configure self-hosted or hosted database-backed storage for this HealthSync app."
