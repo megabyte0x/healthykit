@@ -15,6 +15,53 @@ There is no iCloud or server-side Apple Health REST API. Apple Health reads happ
 
 The app requests read-only HealthKit permissions. It does not request write permissions, does not include analytics, and does not use third-party telemetry or health SDKs.
 
+## Setup
+
+Prerequisites:
+
+- macOS with Xcode 16 or newer
+- An iOS 17+ simulator or a real iPhone for HealthKit testing
+- Python 3.11+ for backend scripts and tests
+- Docker Desktop if you want the local Postgres backend
+
+From the repo root, open the iOS project:
+
+```bash
+open HealthSync.xcodeproj
+```
+
+In Xcode, select the `HealthSync` target, set your development team for signing, confirm the HealthKit capability is enabled, then build for an iOS 17+ simulator or device.
+
+For local persistent sync storage, copy the backend environment template and generate separate secrets for the app ingest token and hosted-token HMAC secret:
+
+```bash
+cp .env.example .env
+python3 -m backend.scripts.generate_token
+python3 -m backend.scripts.generate_token
+```
+
+Edit `.env`, replace `POSTGRES_PASSWORD`, paste the first generated value as `API_TOKEN`, paste the second generated value as `TOKEN_HASH_SECRET`, and keep `.env` uncommitted. Start the local API and Postgres stack:
+
+```bash
+docker compose up --build
+```
+
+Configure HealthSync settings with:
+
+- Simulator backend URL: `http://127.0.0.1:8080`
+- Real iPhone local test URL: `http://<mac-lan-ip>:8080`
+- Production URL: an HTTPS endpoint
+- Auth token: the same value as backend `API_TOKEN`
+
+Run the backend test setup when changing persistence code:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+python3 -m pytest Tests/backend/test_backend_api.py -q
+```
+
 ## Backend Contract
 
 The app posts to:
