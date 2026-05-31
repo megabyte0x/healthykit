@@ -54,6 +54,27 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(String(data: request.httpBody ?? Data(), encoding: .utf8), #"{"label":"Personal Health"}"#)
     }
 
+    func testClientBuildsHostedAgentTokenRefreshRequest() throws {
+        let request = try APIClient.makeHostedAgentTokenRefreshRequest(
+            baseURL: "https://api.example.com",
+            token: "ingest-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/api/hosted/agent-token")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ingest-token")
+    }
+
+    func testHostedAgentTokenRefreshResponseDecodesWorkspaceIdentity() throws {
+        let data = Data(#"{"workspace_id":"wk_test","agent_endpoint":"https://api.example.com/api/agent/health-data","agent_token":"hs_agent_test"}"#.utf8)
+
+        let response = try JSONDecoder().decode(HostedAgentTokenRefreshResponse.self, from: data)
+
+        XCTAssertEqual(response.workspaceID, "wk_test")
+        XCTAssertEqual(response.agentEndpoint, "https://api.example.com/api/agent/health-data")
+        XCTAssertEqual(response.agentToken, "hs_agent_test")
+    }
+
     func testUploadResultDecodesWorkspaceIdentity() throws {
         let data = Data(#"{"ok":true,"received":3,"duplicates":1,"workspace_id":"wk_test","export_id":"export-123"}"#.utf8)
 

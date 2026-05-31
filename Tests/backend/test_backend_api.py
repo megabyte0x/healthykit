@@ -203,6 +203,46 @@ def test_hosted_token_capabilities_are_separated(tmp_path: Path) -> None:
     assert agent_read.status_code == 200
 
 
+def test_hosted_agent_token_can_be_rotated_with_ingest_token(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+    old_agent_headers = {"Authorization": f"Bearer {provisioned['agent_token']}"}
+    client.post("/api/apple-health/sync", headers=ingest_headers, json=sample_payload())
+
+    response = client.post("/api/hosted/agent-token", headers=ingest_headers)
+
+    assert response.status_code == 200
+    rotated = response.json()
+    assert rotated["workspace_id"] == provisioned["workspace_id"]
+    assert rotated["agent_endpoint"] == "https://healthsync.example.test/api/agent/health-data"
+    assert rotated["agent_token"].startswith("hs_agent_")
+    assert rotated["agent_token"] != provisioned["agent_token"]
+
+    old_read = client.get("/api/agent/health-data", headers=old_agent_headers)
+    assert old_read.status_code == 403
+
+    new_read = client.get(
+        "/api/agent/health-data",
+        headers={"Authorization": f"Bearer {rotated['agent_token']}"},
+    )
+    assert new_read.status_code == 200
+    assert new_read.json()["workspace_id"] == provisioned["workspace_id"]
+    assert len(new_read.json()["metrics"]) == 1
+
+
+def test_hosted_agent_token_rotation_rejects_agent_token(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+
+    response = client.post(
+        "/api/hosted/agent-token",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_agent_endpoint_returns_only_own_workspace_data(tmp_path: Path) -> None:
     client = make_client(tmp_path, hosted=True)
     first = client.post("/api/hosted/workspaces", json={"label": "First"}).json()

@@ -61,6 +61,10 @@ Deno.serve(async (req: Request) => {
       return await provisionWorkspace(req);
     }
 
+    if (path === "/api/hosted/agent-token" && req.method === "POST") {
+      return await rotateAgentToken(req);
+    }
+
     if (path === "/api/apple-health/sync" && req.method === "POST") {
       return await ingestSync(req);
     }
@@ -139,6 +143,38 @@ async function provisionWorkspace(req: Request): Promise<Response> {
     workspace_id: workspaceId,
     backend_url: functionBaseUrl,
     ingest_token: ingestToken,
+    agent_endpoint: `${functionBaseUrl}/api/agent/health-data`,
+    agent_token: agentToken,
+  });
+}
+
+async function rotateAgentToken(req: Request): Promise<Response> {
+  const auth = await requireToken(req, "ingest");
+  const createdAt = new Date().toISOString();
+  const tokenId = randomToken("tok");
+  const agentToken = randomToken("hs_agent");
+
+  await requireOk(
+    db.from("access_tokens").insert({
+      id: tokenId,
+      workspace_id: auth.workspaceId,
+      kind: "agent_read",
+      token_hash: await tokenHash(agentToken),
+      created_at: createdAt,
+    }),
+  );
+  await requireOk(
+    db
+      .from("access_tokens")
+      .update({ revoked_at: createdAt })
+      .eq("workspace_id", auth.workspaceId)
+      .eq("kind", "agent_read")
+      .is("revoked_at", null)
+      .neq("id", tokenId),
+  );
+
+  return json({
+    workspace_id: auth.workspaceId,
     agent_endpoint: `${functionBaseUrl}/api/agent/health-data`,
     agent_token: agentToken,
   });

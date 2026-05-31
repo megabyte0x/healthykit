@@ -70,6 +70,12 @@ class HostedWorkspaceResponse(BaseModel):
     agent_token: str
 
 
+class HostedAgentTokenResponse(BaseModel):
+    workspace_id: str
+    agent_endpoint: str
+    agent_token: str
+
+
 class AgentRange(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

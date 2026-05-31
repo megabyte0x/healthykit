@@ -265,6 +265,13 @@ struct SettingsView: View {
                                 Label("Copy read-only agent token", systemImage: "key")
                             }
                         }
+
+                        Button {
+                            Task { await appState.refreshHostedAgentToken() }
+                        } label: {
+                            Label("Refresh read-only agent token", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(appState.isBusy || !appState.hasStoredToken)
                     } header: {
                         Text("Agent Access Details")
                     }

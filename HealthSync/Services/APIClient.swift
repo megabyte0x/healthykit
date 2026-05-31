@@ -63,6 +63,18 @@ struct HostedWorkspaceProvisioningResponse: Codable, Equatable {
     }
 }
 
+struct HostedAgentTokenRefreshResponse: Codable, Equatable {
+    let workspaceID: String
+    let agentEndpoint: String
+    let agentToken: String
+
+    private enum CodingKeys: String, CodingKey {
+        case workspaceID = "workspace_id"
+        case agentEndpoint = "agent_endpoint"
+        case agentToken = "agent_token"
+    }
+}
+
 struct HostedWorkspaceProvisioningRequest: Codable {
     let label: String?
 }
@@ -151,6 +163,22 @@ final class APIClient: SyncUploading {
         return request
     }
 
+    static func makeHostedAgentTokenRefreshRequest(baseURL: String, token: String) throws -> URLRequest {
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedToken.isEmpty else { throw APIClientError.missingToken }
+        let rootURL = try validatedRootURL(from: baseURL)
+        let endpoint = rootURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("hosted")
+            .appendingPathComponent("agent-token")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(trimmedToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
     func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult {
         let request = try Self.makeSyncRequest(
             baseURL: configuration.baseURL,
@@ -223,6 +251,27 @@ final class APIClient: SyncUploading {
         case .accepted:
             do {
                 return try JSONDecoder().decode(HostedWorkspaceProvisioningResponse.self, from: data)
+            } catch {
+                throw APIClientError.invalidResponse
+            }
+        case .authError:
+            throw APIClientError.authRejected
+        case .transient, .permanent:
+            throw APIClientError.serverRejected(httpResponse.statusCode)
+        }
+    }
+
+    func refreshHostedAgentToken(baseURL: String, token: String) async throws -> HostedAgentTokenRefreshResponse {
+        let request = try Self.makeHostedAgentTokenRefreshRequest(baseURL: baseURL, token: token)
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        switch Self.classify(statusCode: httpResponse.statusCode) {
+        case .accepted:
+            do {
+                return try JSONDecoder().decode(HostedAgentTokenRefreshResponse.self, from: data)
             } catch {
                 throw APIClientError.invalidResponse
             }

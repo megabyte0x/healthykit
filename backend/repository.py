@@ -22,6 +22,7 @@ from .schemas import (
     AgentDevice,
     HealthMetricOut,
     HealthWorkoutOut,
+    HostedAgentTokenResponse,
     HostedWorkspaceResponse,
     MetricDailySummary,
     MetricListResponse,
@@ -73,6 +74,44 @@ def provision_hosted_workspace(db: Session, settings: Settings, label: str | Non
         workspace_id=workspace_id,
         backend_url=settings.hosted_public_base_url,
         ingest_token=ingest_token,
+        agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
+        agent_token=agent_token,
+    )
+
+
+def rotate_hosted_agent_token(db: Session, settings: Settings, workspace_id: str) -> HostedAgentTokenResponse:
+    created_at = datetime.now(timezone.utc)
+    token_id = generate_token("tok")
+    agent_token = generate_token("hs_agent")
+
+    try:
+        db.add(
+            AccessTokenRecord(
+                id=token_id,
+                workspace_id=workspace_id,
+                kind="agent_read",
+                token_hash=token_hash(agent_token, settings.token_hash_secret),
+                created_at=created_at,
+            )
+        )
+        db.flush()
+        (
+            db.query(AccessTokenRecord)
+            .filter(
+                AccessTokenRecord.workspace_id == workspace_id,
+                AccessTokenRecord.kind == "agent_read",
+                AccessTokenRecord.id != token_id,
+                AccessTokenRecord.revoked_at.is_(None),
+            )
+            .update({AccessTokenRecord.revoked_at: created_at}, synchronize_session=False)
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return HostedAgentTokenResponse(
+        workspace_id=workspace_id,
         agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
         agent_token=agent_token,
     )

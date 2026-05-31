@@ -123,6 +123,26 @@ final class AppState: ObservableObject {
         }
     }
 
+    func refreshHostedAgentToken() async {
+        await runBusy {
+            let ingestToken = (try keychain.readHostedIngestToken() ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !ingestToken.isEmpty else { throw APIClientError.missingToken }
+
+            let response = try await APIClient(maxAttempts: 1).refreshHostedAgentToken(
+                baseURL: AppSettings.hostedBackendURL,
+                token: ingestToken
+            )
+            settings.storageMode = .hostedHealthSync
+            settings.hostedWorkspaceID = response.workspaceID
+            settings.hostedAgentEndpoint = response.agentEndpoint
+            try keychain.saveHostedAgentToken(response.agentToken)
+            hostedAgentToken = response.agentToken
+            hasStoredToken = true
+            try await saveSettingsOnly()
+        }
+    }
+
     func testConnection() async {
         await runBusy {
             guard let store else { throw APIClientError.invalidResponse }
