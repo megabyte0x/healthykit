@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="heartGradient" x1="134" y1="828" x2="872" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D5F78"/>
+      <stop offset="1" stop-color="#66CA78"/>
+    </linearGradient>
+    <filter id="heartShadow" x="80" y="140" width="864" height="780" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#18343E" flood-opacity="0.18"/>
+    </filter>
+    <clipPath id="heartClip">
+      <path d="M512 873C485 840 120 539 128 366C134 241 245 175 363 201C430 216 485 263 512 323C539 263 594 216 661 201C779 175 890 241 896 366C904 539 539 840 512 873Z"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <rect x="1" y="1" width="1022" height="1022" rx="214" fill="#FBFCFC"/>
+  <path d="M512 873C485 840 120 539 128 366C134 241 245 175 363 201C430 216 485 263 512 323C539 263 594 216 661 201C779 175 890 241 896 366C904 539 539 840 512 873Z" fill="url(#heartGradient)" filter="url(#heartShadow)"/>
+  <g clip-path="url(#heartClip)">
+    <path d="M116 548H338L404 365C414 337 433 337 443 365L516 704C527 757 549 757 562 704L624 548H908" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

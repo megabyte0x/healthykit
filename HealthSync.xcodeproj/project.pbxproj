@@ -33,6 +33,7 @@
 		110000000000000000000017 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000116 /* libsqlite3.tbd */; };
 		110000000000000000000018 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000117 /* HealthKit.framework */; };
 		110000000000000000000019 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000000000000000000118 /* Security.framework */; };
+		11000000000000000000001A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000119 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 		110000000000000000000116 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		110000000000000000000117 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		110000000000000000000118 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		110000000000000000000119 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		110000000000000000000201 /* HealthNormalizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthNormalizerTests.swift; sourceTree = "<group>"; };
 		110000000000000000000202 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 		110000000000000000000203 /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 				110000000000000000000806 /* Models */,
 				110000000000000000000807 /* Services */,
 				110000000000000000000808 /* Views */,
+				110000000000000000000119 /* Assets.xcassets */,
 				110000000000000000000103 /* Info.plist */,
 				110000000000000000000104 /* HealthSync.entitlements */,
 			);
@@ -280,6 +283,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11000000000000000000001A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,6 +463,7 @@
 		110000000000000000000B03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = HealthSync/HealthSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -487,6 +492,7 @@
 		110000000000000000000B04 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = HealthSync/HealthSync.entitlements;
 				CODE_SIGN_STYLE = Automatic;
