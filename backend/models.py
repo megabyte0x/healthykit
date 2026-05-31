@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -66,6 +66,7 @@ class AccessTokenRecord(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
+        CheckConstraint("kind IN ('ingest', 'agent_read')", name="ck_access_tokens_kind"),
         Index("ix_access_tokens_token_hash", "token_hash", unique=True),
     )
 
@@ -99,6 +100,9 @@ class SyncBatchRecord(Base):
     workouts_count: Mapped[int] = mapped_column(Integer, nullable=False)
 
     __table_args__ = (
+        CheckConstraint("date_range_end >= date_range_start", name="ck_sync_batches_date_range_order"),
+        CheckConstraint("metrics_count >= 0", name="ck_sync_batches_metrics_count_nonnegative"),
+        CheckConstraint("workouts_count >= 0", name="ck_sync_batches_workouts_count_nonnegative"),
         Index("ix_sync_batches_device_received", "device_id", "received_at"),
         Index("ix_sync_batches_workspace_received", "workspace_id", "received_at"),
     )
@@ -126,7 +130,7 @@ class HealthMetricRecord(Base):
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     source_name: Mapped[str] = mapped_column(String(256), nullable=False)
     source_bundle_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    metadata_json: Mapped[dict[str, str]] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata",
         json_metadata_type,
         nullable=False,
@@ -138,6 +142,7 @@ class HealthMetricRecord(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("end_at >= start_at", name="ck_health_metrics_time_order"),
         ForeignKeyConstraint(
             ["workspace_id", "export_id"],
             ["sync_batches.workspace_id", "sync_batches.export_id"],
@@ -173,7 +178,7 @@ class HealthWorkoutRecord(Base):
     distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_name: Mapped[str] = mapped_column(String(256), nullable=False)
     source_bundle_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    metadata_json: Mapped[dict[str, str]] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata",
         json_metadata_type,
         nullable=False,
@@ -185,6 +190,20 @@ class HealthWorkoutRecord(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("end_at >= start_at", name="ck_health_workouts_time_order"),
+        CheckConstraint("duration_seconds >= 0", name="ck_health_workouts_duration_nonnegative"),
+        CheckConstraint(
+            "total_energy_kcal IS NULL OR total_energy_kcal >= 0",
+            name="ck_health_workouts_total_energy_nonnegative",
+        ),
+        CheckConstraint(
+            "active_energy_kcal IS NULL OR active_energy_kcal >= 0",
+            name="ck_health_workouts_active_energy_nonnegative",
+        ),
+        CheckConstraint(
+            "distance_meters IS NULL OR distance_meters >= 0",
+            name="ck_health_workouts_distance_nonnegative",
+        ),
         ForeignKeyConstraint(
             ["workspace_id", "export_id"],
             ["sync_batches.workspace_id", "sync_batches.export_id"],

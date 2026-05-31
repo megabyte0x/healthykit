@@ -12,11 +12,14 @@ from .auth import AuthContext, bearer_token, resolve_agent_auth, resolve_sync_au
 from .config import Settings
 from .database import create_engine_for_url, create_session_factory
 from .repository import (
+    get_agent_catalog,
     list_metrics,
     list_sync_batches,
     list_workouts,
     persist_sync_payload,
     provision_hosted_workspace,
+    summarize_metric_items,
+    summarize_workout_items,
 )
 from .schemas import (
     AgentHealthDataResponse,
@@ -234,11 +237,16 @@ def create_app(
             offset=offset,
         )
         return AgentHealthDataResponse(
+            agent_schema_version=2,
             workspace_id=auth.workspace_id,
             range=AgentRange(from_at=from_at, to=to),
+            page=metrics.page.model_copy(update={"has_more": metrics.page.has_more or workouts.page.has_more or syncs.page.has_more}),
+            catalog=get_agent_catalog(db, auth.workspace_id),
             metrics=metrics.items,
             workouts=workouts.items,
             syncs=syncs.items,
+            metric_daily_summaries=summarize_metric_items(metrics.items),
+            workout_daily_summaries=summarize_workout_items(workouts.items),
         )
 
     return app

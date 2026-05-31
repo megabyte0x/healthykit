@@ -269,3 +269,83 @@ def test_agent_health_data_filters_syncs_by_requested_range(tmp_path: Path) -> N
 
     assert response.status_code == 200
     assert [item["export_id"] for item in response.json()["syncs"]] == ["11111111-1111-4111-8111-111111111111"]
+
+
+def test_agent_health_data_returns_digest_schema_for_agents(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    payload = sample_payload()
+    payload["metrics"][0]["metadata"] = {
+        "HKWasUserEntered": False,
+        "sample_count": 1,
+    }
+    client.post("/api/apple-health/sync", headers=headers, json=payload)
+
+    response = client.get(
+        "/api/agent/health-data",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["agent_schema_version"] == 2
+    assert body["page"] == {"limit": 100, "offset": 0, "has_more": False}
+    assert body["catalog"] == {
+        "metric_types": ["stepCount"],
+        "activity_types": ["running"],
+        "timezones": ["Asia/Kolkata"],
+        "devices": [{"device_id": "device-1", "label": None}],
+    }
+    assert body["metrics"][0]["local_date"] == "2026-05-31"
+    assert body["metrics"][0]["timezone"] == "Asia/Kolkata"
+    assert body["metrics"][0]["metadata"] == {
+        "HKWasUserEntered": False,
+        "sample_count": 1,
+    }
+    assert body["metric_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "type": "stepCount",
+            "unit": "count",
+            "sample_count": 1,
+            "total_value": 1200.0,
+            "average_value": 1200.0,
+            "minimum_value": 1200.0,
+            "maximum_value": 1200.0,
+        }
+    ]
+    assert body["workout_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "activity_type": "running",
+            "workout_count": 1,
+            "duration_minutes": 30.0,
+            "distance_km": 5.0,
+            "total_energy_kcal": 250.0,
+            "active_energy_kcal": 230.0,
+        }
+    ]
+
+
+def test_agent_health_data_reports_has_more_when_result_is_limited(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    first_payload = sample_payload()
+    second_payload = deepcopy(sample_payload("22222222-2222-4222-8222-222222222222"))
+    second_payload["device_id"] = "device-2"
+    second_payload["metrics"][0]["id"] = "healthkit:metric-2"
+
+    client.post("/api/apple-health/sync", headers=headers, json=first_payload)
+    client.post("/api/apple-health/sync", headers=headers, json=second_payload)
+
+    response = client.get(
+        "/api/agent/health-data?limit=1",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["page"] == {"limit": 1, "offset": 0, "has_more": True}
