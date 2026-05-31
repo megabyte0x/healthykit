@@ -85,53 +85,81 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Storage") {
-                    Picker("Storage", selection: $appState.settings.storageMode) {
+                Section {
+                    Picker("Storage Mode", selection: $appState.settings.storageMode) {
                         ForEach(StorageMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
-
+                    .pickerStyle(.menu)
+                    
                     if appState.settings.storageMode == .hostedHealthSync {
                         let presentation = hostedStoragePresentation
 
-                        Text("Your selected Apple Health data will be uploaded to HealthSync-hosted storage and made available through a private read-only endpoint.")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Your selected Apple Health data will be uploaded to HealthSync-hosted storage and made available through a private read-only endpoint.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(2)
 
-                        if let progressMessage = presentation.progressMessage {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text(progressMessage)
-                                    .foregroundStyle(.secondary)
+                            if let progressMessage = presentation.progressMessage {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text(progressMessage)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.top, 4)
+                            }
+
+                            if let feedbackMessage = presentation.feedbackMessage {
+                                HStack(spacing: 6) {
+                                    Image(systemName: presentation.feedbackKind == .error ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                                    Text(feedbackMessage)
+                                }
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(presentation.feedbackKind.color)
+                                .padding(.top, 4)
                             }
                         }
-
-                        if let feedbackMessage = presentation.feedbackMessage {
-                            Text(feedbackMessage)
-                                .font(.footnote)
-                                .foregroundStyle(presentation.feedbackKind.color)
-                        }
+                        .padding(.vertical, 4)
 
                         Button {
                             Task { await appState.createHostedStorage() }
                         } label: {
-                            Label(presentation.createButtonTitle, systemImage: presentation.createButtonSystemImage)
+                            HStack {
+                                Image(systemName: presentation.createButtonSystemImage)
+                                Text(presentation.createButtonTitle)
+                            }
                         }
                         .disabled(presentation.isCreateButtonDisabled)
                         .accessibilityIdentifier("create-hosted-storage-button")
                     }
+                } header: {
+                    Text("Storage Destination")
                 }
 
                 if appState.settings.storageMode.showsManualBackendSettings {
-                    Section("Backend") {
-                        TextField("https://api.example.com", text: $appState.settings.backendURL)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                            .autocorrectionDisabled()
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "link")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            TextField("https://api.example.com", text: $appState.settings.backendURL)
+                                .textInputAutocapitalization(.never)
+                                .keyboardType(.URL)
+                                .autocorrectionDisabled()
+                        }
 
-                        SecureField(appState.hasStoredToken ? "New token (stored)" : "Auth token", text: $appState.authTokenDraft)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                        HStack(spacing: 12) {
+                            Image(systemName: "key.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            SecureField(appState.hasStoredToken ? "New token (stored)" : "Auth token", text: $appState.authTokenDraft)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        }
 
                         Button {
                             Task { await appState.saveSettingsAndToken() }
@@ -144,11 +172,13 @@ struct SettingsView: View {
                         } label: {
                             Label("Test connection", systemImage: "network")
                         }
+                    } header: {
+                        Text("Backend Configuration")
                     }
                 }
 
                 if appState.settings.storageMode == .hostedHealthSync && hasAgentAccess {
-                    Section("Agent Access") {
+                    Section {
                         if !hostedAgentEndpoint.isEmpty {
                             Button {
                                 copyToPasteboard(hostedAgentEndpoint)
@@ -156,10 +186,21 @@ struct SettingsView: View {
                                 Label("Copy agent endpoint", systemImage: "doc.on.doc")
                             }
 
-                            Text(hostedAgentEndpoint)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(4)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Endpoint URL")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                
+                                Text(hostedAgentEndpoint)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(4)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.primary.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .padding(.vertical, 4)
                         }
 
                         if !appState.hostedAgentToken.isEmpty {
@@ -169,20 +210,39 @@ struct SettingsView: View {
                                 Label("Copy read-only agent token", systemImage: "key")
                             }
                         }
+                    } header: {
+                        Text("Agent Access Details")
                     }
                 }
 
-                Section("Data Types") {
+                Section {
                     ForEach(HealthDataType.allCases) { type in
-                        Toggle(type.label, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { appState.settings.selectedTypes.contains(type) },
                             set: { enabled in appState.set(type: type, enabled: enabled) }
-                        ))
+                        )) {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(dataTypeColor(for: type).opacity(0.12))
+                                        .frame(width: 32, height: 32)
+                                    Image(systemName: dataTypeIcon(for: type))
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(dataTypeColor(for: type))
+                                }
+                                
+                                Text(type.label)
+                                    .font(.body)
+                            }
+                        }
+                        .tint(dataTypeColor(for: type))
                     }
+                } header: {
+                    Text("Select Health Metrics")
                 }
 
-                Section("Sync Frequency") {
-                    Picker("Frequency", selection: $appState.settings.syncFrequency) {
+                Section {
+                    Picker("Sync Frequency", selection: $appState.settings.syncFrequency) {
                         ForEach(SyncFrequency.allCases) { frequency in
                             Text(frequency.label).tag(frequency)
                         }
@@ -193,9 +253,11 @@ struct SettingsView: View {
                     } label: {
                         Label("Apply frequency", systemImage: "clock.arrow.circlepath")
                     }
+                } header: {
+                    Text("Background Synchronization")
                 }
 
-                Section("Manual Actions") {
+                Section {
                     Button {
                         Task { await appState.syncLast24Hours() }
                     } label: {
@@ -207,6 +269,8 @@ struct SettingsView: View {
                     } label: {
                         Label("Backfill date range", systemImage: "calendar")
                     }
+                } header: {
+                    Text("Manual Operations")
                 }
             }
             .navigationTitle("Settings")
@@ -215,7 +279,9 @@ struct SettingsView: View {
                     Button {
                         isSupportPromptPresented = true
                     } label: {
-                        Label("Support", systemImage: "heart.circle")
+                        Image(systemName: "heart.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(HealthSyncTheme.primaryRed)
                     }
                     .accessibilityIdentifier("support-development-button")
                 }
@@ -248,6 +314,48 @@ struct SettingsView: View {
     private func copyToPasteboard(_ value: String) {
         UIPasteboard.general.string = value
     }
+    
+    // Mapping icon systems to health data types
+    private func dataTypeIcon(for type: HealthDataType) -> String {
+        switch type {
+        case .stepCount: "figure.walk"
+        case .heartRate: "heart.fill"
+        case .restingHeartRate: "heart.text.square"
+        case .hrvSDNN: "waveform.path.ecg"
+        case .activeEnergy: "flame.fill"
+        case .basalEnergy: "bolt.fill"
+        case .bodyMass: "scalemass.fill"
+        case .bodyFatPercentage: "percent"
+        case .dietaryEnergy: "fork.knife"
+        case .dietaryProtein: "fish.fill"
+        case .dietaryCarbohydrates: "leaf.fill"
+        case .dietaryFat: "drop.fill"
+        case .water: "drop.bubble.fill"
+        case .sleepAnalysis: "moon.fill"
+        case .workouts: "figure.run"
+        }
+    }
+    
+    // Mapping theme colors to health data types
+    private func dataTypeColor(for type: HealthDataType) -> Color {
+        switch type {
+        case .stepCount: HealthSyncTheme.primaryBlue
+        case .heartRate: HealthSyncTheme.primaryRed
+        case .restingHeartRate: HealthSyncTheme.primaryPink
+        case .hrvSDNN: .purple
+        case .activeEnergy: HealthSyncTheme.warningOrange
+        case .basalEnergy: .orange
+        case .bodyMass: .teal
+        case .bodyFatPercentage: .indigo
+        case .dietaryEnergy: .green
+        case .dietaryProtein: .orange
+        case .dietaryCarbohydrates: .yellow
+        case .dietaryFat: .red
+        case .water: .blue
+        case .sleepAnalysis: .indigo
+        case .workouts: .green
+        }
+    }
 }
 
 private extension HostedStorageFeedbackKind {
@@ -256,9 +364,9 @@ private extension HostedStorageFeedbackKind {
         case .none, .info:
             .secondary
         case .success:
-            .green
+            HealthSyncTheme.successGreen
         case .error:
-            .red
+            HealthSyncTheme.primaryRed
         }
     }
 }
@@ -271,33 +379,67 @@ private struct SupportDevelopmentSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            ZStack {
+                HealthSyncTheme.backgroundGradient
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    // Visual Header Icon
+                    ZStack {
+                        Circle()
+                            .fill(HealthSyncTheme.primaryRed.opacity(0.1))
+                            .frame(width: 80, height: 80)
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(HealthSyncTheme.primaryRed)
+                    }
+                    .padding(.top, 16)
+                    
                     Text(prompt.message)
                         .font(.body)
-                }
-
-                Section("Zcash Address") {
-                    Button {
-                        copyZcashAddress()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(
-                                didCopyAddress ? "Copied to clipboard" : "Tap to copy address",
-                                systemImage: didCopyAddress ? "checkmark.circle.fill" : "doc.on.doc"
-                            )
-                            .foregroundStyle(didCopyAddress ? .green : .primary)
-
-                            Text(prompt.zcashAddress)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(6)
-                                .minimumScaleFactor(0.8)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Zcash Address")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.5)
+                        
+                        Button {
+                            copyZcashAddress()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(prompt.zcashAddress)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.primary)
+                                    .multilineTextAlignment(.leading)
+                                    .lineLimit(8)
+                                    .minimumScaleFactor(0.8)
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.primary.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                
+                                HStack {
+                                    Image(systemName: didCopyAddress ? "checkmark.circle.fill" : "doc.on.doc")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(didCopyAddress ? "Address Copied" : "Tap to Copy Wallet Address")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .foregroundStyle(didCopyAddress ? HealthSyncTheme.successGreen : HealthSyncTheme.primaryBlue)
+                                .padding(.leading, 2)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("copy-zcash-address-button")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("copy-zcash-address-button")
+                    .healthCardStyle(padding: 16)
+                    
+                    Spacer()
                 }
+                .padding(24)
             }
             .navigationTitle("Support Development")
             .navigationBarTitleDisplayMode(.inline)
@@ -306,6 +448,7 @@ private struct SupportDevelopmentSheet: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .font(.body.weight(.semibold))
                 }
             }
         }
