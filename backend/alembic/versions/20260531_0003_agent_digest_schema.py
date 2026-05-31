@@ -26,55 +26,58 @@ def downgrade() -> None:
 
 
 def _create_check_constraints() -> None:
-    op.create_check_constraint(
-        "ck_access_tokens_kind",
-        "access_tokens",
-        "kind IN ('ingest', 'agent_read')",
-    )
-    op.create_check_constraint(
-        "ck_sync_batches_date_range_order",
-        "sync_batches",
-        "date_range_end >= date_range_start",
-    )
-    op.create_check_constraint(
-        "ck_sync_batches_metrics_count_nonnegative",
-        "sync_batches",
-        "metrics_count >= 0",
-    )
-    op.create_check_constraint(
-        "ck_sync_batches_workouts_count_nonnegative",
-        "sync_batches",
-        "workouts_count >= 0",
-    )
-    op.create_check_constraint(
-        "ck_health_metrics_time_order",
-        "health_metrics",
-        "end_at >= start_at",
-    )
-    op.create_check_constraint(
-        "ck_health_workouts_time_order",
-        "health_workouts",
-        "end_at >= start_at",
-    )
-    op.create_check_constraint(
-        "ck_health_workouts_duration_nonnegative",
-        "health_workouts",
-        "duration_seconds >= 0",
-    )
-    op.create_check_constraint(
-        "ck_health_workouts_total_energy_nonnegative",
-        "health_workouts",
-        "total_energy_kcal IS NULL OR total_energy_kcal >= 0",
-    )
-    op.create_check_constraint(
-        "ck_health_workouts_active_energy_nonnegative",
-        "health_workouts",
-        "active_energy_kcal IS NULL OR active_energy_kcal >= 0",
-    )
-    op.create_check_constraint(
-        "ck_health_workouts_distance_nonnegative",
-        "health_workouts",
-        "distance_meters IS NULL OR distance_meters >= 0",
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_access_tokens_kind') THEN
+                ALTER TABLE access_tokens
+                    ADD CONSTRAINT ck_access_tokens_kind CHECK (kind IN ('ingest', 'agent_read'));
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_sync_batches_date_range_order') THEN
+                ALTER TABLE sync_batches
+                    ADD CONSTRAINT ck_sync_batches_date_range_order CHECK (date_range_end >= date_range_start);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_sync_batches_metrics_count_nonnegative') THEN
+                ALTER TABLE sync_batches
+                    ADD CONSTRAINT ck_sync_batches_metrics_count_nonnegative CHECK (metrics_count >= 0);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_sync_batches_workouts_count_nonnegative') THEN
+                ALTER TABLE sync_batches
+                    ADD CONSTRAINT ck_sync_batches_workouts_count_nonnegative CHECK (workouts_count >= 0);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_metrics_time_order') THEN
+                ALTER TABLE health_metrics
+                    ADD CONSTRAINT ck_health_metrics_time_order CHECK (end_at >= start_at);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_workouts_time_order') THEN
+                ALTER TABLE health_workouts
+                    ADD CONSTRAINT ck_health_workouts_time_order CHECK (end_at >= start_at);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_workouts_duration_nonnegative') THEN
+                ALTER TABLE health_workouts
+                    ADD CONSTRAINT ck_health_workouts_duration_nonnegative CHECK (duration_seconds >= 0);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_workouts_total_energy_nonnegative') THEN
+                ALTER TABLE health_workouts
+                    ADD CONSTRAINT ck_health_workouts_total_energy_nonnegative CHECK (
+                        total_energy_kcal IS NULL OR total_energy_kcal >= 0
+                    );
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_workouts_active_energy_nonnegative') THEN
+                ALTER TABLE health_workouts
+                    ADD CONSTRAINT ck_health_workouts_active_energy_nonnegative CHECK (
+                        active_energy_kcal IS NULL OR active_energy_kcal >= 0
+                    );
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_health_workouts_distance_nonnegative') THEN
+                ALTER TABLE health_workouts
+                    ADD CONSTRAINT ck_health_workouts_distance_nonnegative CHECK (
+                        distance_meters IS NULL OR distance_meters >= 0
+                    );
+            END IF;
+        END $$
+        """
     )
 
 
@@ -94,7 +97,7 @@ def _drop_check_constraints() -> None:
 def _create_postgresql_views() -> None:
     op.execute(
         """
-        CREATE VIEW agent_metric_daily_summaries
+        CREATE OR REPLACE VIEW agent_metric_daily_summaries
         WITH (security_invoker = true) AS
         SELECT
             m.workspace_id,
@@ -121,7 +124,7 @@ def _create_postgresql_views() -> None:
     )
     op.execute(
         """
-        CREATE VIEW agent_workout_daily_summaries
+        CREATE OR REPLACE VIEW agent_workout_daily_summaries
         WITH (security_invoker = true) AS
         SELECT
             w.workspace_id,
@@ -151,6 +154,18 @@ def _create_postgresql_views() -> None:
             w.workspace_id,
             (w.start_at AT TIME ZONE sb.timezone)::date,
             w.activity_type
+        """
+    )
+    op.execute(
+        """
+        COMMENT ON VIEW agent_metric_daily_summaries
+            IS 'Agent-friendly daily metric digest scoped by workspace_id.'
+        """
+    )
+    op.execute(
+        """
+        COMMENT ON VIEW agent_workout_daily_summaries
+            IS 'Agent-friendly daily workout digest scoped by workspace_id.'
         """
     )
 
