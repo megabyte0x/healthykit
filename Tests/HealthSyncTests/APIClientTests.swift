@@ -1,4 +1,5 @@
 import XCTest
+import HealthKit
 @testable import HealthSync
 
 final class APIClientTests: XCTestCase {
@@ -35,6 +36,10 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "X-App-Version"), "1.0")
         XCTAssertFalse(String(describing: APIClientError.authRejected).contains("secret-token"))
         XCTAssertFalse(APIClientError.authRejected.userMessage.contains("secret-token"))
+        XCTAssertEqual(
+            APIClientError.authRejected.userMessage,
+            "The saved backend token was rejected. For hosted storage, create hosted storage again; for your own backend, update the auth token."
+        )
     }
 
     func testClientBuildsHostedProvisioningRequest() throws {
@@ -47,6 +52,17 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
         XCTAssertEqual(String(data: request.httpBody ?? Data(), encoding: .utf8), #"{"label":"Personal Health"}"#)
+    }
+
+    func testNetworkFailureMessagesExposeActionableCause() {
+        XCTAssertEqual(
+            APIClient.networkFailureMessage(for: URLError(.cannotFindHost)),
+            "Cannot find the backend host. Check the backend URL."
+        )
+        XCTAssertEqual(
+            APIClient.networkFailureMessage(for: URLError(.notConnectedToInternet)),
+            "This iPhone lost network access. Check Wi-Fi or cellular and try again."
+        )
     }
 }
 
@@ -70,6 +86,49 @@ final class AppSettingsHostedEndpointTests: XCTestCase {
     func testOnlyCustomStorageShowsManualBackendSettings() {
         XCTAssertTrue(StorageMode.customBackend.showsManualBackendSettings)
         XCTAssertFalse(StorageMode.hostedHealthSync.showsManualBackendSettings)
+    }
+}
+
+final class HealthKitManagerErrorTests: XCTestCase {
+    func testAuthorizationNotDeterminedMessageTellsUserToConnectAppleHealth() {
+        XCTAssertEqual(
+            HealthKitManagerError.authorizationNotDetermined.errorDescription,
+            "Apple Health permissions are not set up yet. Tap Connect Apple Health and allow the requested read permissions."
+        )
+    }
+}
+
+final class HealthPermissionPromptPresentationTests: XCTestCase {
+    func testShowsConnectActionWhenHealthPermissionsAreMissing() {
+        let presentation = HealthPermissionPromptPresentation(
+            permissionSummary: "Not requested",
+            lastError: nil,
+            isBusy: false
+        )
+
+        XCTAssertTrue(presentation.shouldShowConnectAction)
+        XCTAssertEqual(presentation.connectButtonTitle, "Connect Apple Health")
+        XCTAssertFalse(presentation.isConnectButtonDisabled)
+    }
+
+    func testShowsConnectActionWhenSyncHitAuthorizationNotDetermined() {
+        let presentation = HealthPermissionPromptPresentation(
+            permissionSummary: "Requested",
+            lastError: HealthKitManagerError.authorizationNotDetermined.errorDescription,
+            isBusy: false
+        )
+
+        XCTAssertTrue(presentation.shouldShowConnectAction)
+    }
+
+    func testHidesConnectActionWhenPermissionsAreAlreadyRequested() {
+        let presentation = HealthPermissionPromptPresentation(
+            permissionSummary: "Requested",
+            lastError: nil,
+            isBusy: false
+        )
+
+        XCTAssertFalse(presentation.shouldShowConnectAction)
     }
 }
 
@@ -143,5 +202,18 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
 
         XCTAssertEqual(presentation.feedbackMessage, "Hosted storage is ready.")
         XCTAssertEqual(presentation.feedbackKind, .success)
+    }
+
+    func testExistingHostedStorageOffersRefreshAction() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "https://api.example.com",
+            lastError: nil,
+            hostedAgentEndpoint: "https://api.example.com/api/agent/health-data",
+            hostedAgentToken: "agent-token"
+        )
+
+        XCTAssertEqual(presentation.createButtonTitle, "Refresh Hosted Storage")
+        XCTAssertEqual(presentation.createButtonSystemImage, "arrow.clockwise")
     }
 }

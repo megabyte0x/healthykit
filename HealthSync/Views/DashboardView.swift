@@ -1,5 +1,27 @@
 import SwiftUI
 
+struct HealthPermissionPromptPresentation: Equatable {
+    let permissionSummary: String
+    let lastError: String?
+    let isBusy: Bool
+
+    var shouldShowConnectAction: Bool {
+        permissionSummary != "Requested" || isAuthorizationNotDeterminedError
+    }
+
+    var connectButtonTitle: String {
+        "Connect Apple Health"
+    }
+
+    var isConnectButtonDisabled: Bool {
+        isBusy
+    }
+
+    private var isAuthorizationNotDeterminedError: Bool {
+        lastError == HealthKitManagerError.authorizationNotDetermined.errorDescription
+    }
+}
+
 struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -107,6 +129,15 @@ struct DashboardView: View {
                                     .foregroundStyle(HealthSyncTheme.primaryBlue)
                                 Text("Control Center")
                                     .font(.headline)
+                            }
+
+                            if healthPermissionPresentation.shouldShowConnectAction {
+                                HealthPermissionActionView(
+                                    presentation: healthPermissionPresentation,
+                                    onConnect: { Task { await appState.connectAppleHealth() } }
+                                )
+                                Divider()
+                                    .padding(.vertical, 4)
                             }
                             
                             // Manual Sync Button
@@ -257,6 +288,14 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
+
+    private var healthPermissionPresentation: HealthPermissionPromptPresentation {
+        HealthPermissionPromptPresentation(
+            permissionSummary: appState.permissionSummary,
+            lastError: appState.status.lastError ?? appState.lastError,
+            isBusy: appState.isBusy
+        )
+    }
     
     private func logColor(for level: SyncLogLevel) -> Color {
         switch level {
@@ -264,6 +303,49 @@ struct DashboardView: View {
         case .success: HealthSyncTheme.successGreen
         case .warning: HealthSyncTheme.warningOrange
         case .error: HealthSyncTheme.primaryRed
+        }
+    }
+}
+
+private struct HealthPermissionActionView: View {
+    let presentation: HealthPermissionPromptPresentation
+    let onConnect: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.text.square.fill")
+                    .foregroundStyle(HealthSyncTheme.primaryRed)
+                Text("Apple Health Access")
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            Button(action: onConnect) {
+                HStack(spacing: 8) {
+                    if presentation.isConnectButtonDisabled {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "checkmark.shield.fill")
+                        Text(presentation.connectButtonTitle)
+                    }
+                }
+            }
+            .buttonStyle(HealthSyncTheme.PrimaryButtonStyle(
+                isBusy: presentation.isConnectButtonDisabled,
+                gradient: buttonGradient
+            ))
+            .disabled(presentation.isConnectButtonDisabled)
+            .accessibilityIdentifier("connect-apple-health-sync-button")
+        }
+        .padding(.bottom, 2)
+    }
+
+    private var buttonGradient: LinearGradient {
+        if presentation.isConnectButtonDisabled {
+            LinearGradient(colors: [.secondary, .secondary], startPoint: .top, endPoint: .bottom)
+        } else {
+            HealthSyncTheme.heartGradient
         }
     }
 }
