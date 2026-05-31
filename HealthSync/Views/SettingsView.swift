@@ -30,15 +30,23 @@ struct HostedStorageSetupPresentation: Equatable {
     let hostedAgentToken: String
 
     var createButtonTitle: String {
-        isBusy ? "Creating Hosted Storage..." : "Create Hosted Storage"
+        if isBusy {
+            return "Creating Hosted Storage..."
+        }
+
+        return hasAgentAccess ? "Hosted Storage Created" : "Create Hosted Storage"
     }
 
     var createButtonSystemImage: String {
-        isBusy ? "hourglass" : "externaldrive.badge.plus"
+        if isBusy {
+            return "hourglass"
+        }
+
+        return hasAgentAccess ? "checkmark.circle" : "externaldrive.badge.plus"
     }
 
     var isCreateButtonDisabled: Bool {
-        isBusy
+        isBusy || hasAgentAccess
     }
 
     var progressMessage: String? {

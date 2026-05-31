@@ -93,6 +93,16 @@ final class AppState: ObservableObject {
 
     func createHostedStorage() async {
         await runBusy {
+            let existingAgentEndpoint = settings.hostedAgentEndpoint?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let existingAgentToken = hostedAgentToken.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard existingAgentEndpoint.isEmpty && existingAgentToken.isEmpty else {
+                settings.storageMode = .hostedHealthSync
+                try await saveSettingsOnly()
+                restartPeriodicSync()
+                return
+            }
+
             let response = try await APIClient(maxAttempts: 1).provisionHostedWorkspace(
                 baseURL: AppSettings.hostedBackendURL,
                 label: "Personal Health"
