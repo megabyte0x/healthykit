@@ -226,6 +226,15 @@ async function ingestSync(req: Request): Promise<Response> {
     );
   }
 
+  console.info("healthsync_ingest", {
+    workspace_id: auth.workspaceId,
+    export_id: exportId,
+    device_id: deviceId,
+    metrics_count: metrics.length,
+    workouts_count: workouts.length,
+    duplicates,
+  });
+
   return json({
     ok: true,
     received: metrics.length + workouts.length,
