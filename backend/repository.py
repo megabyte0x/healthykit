@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session
@@ -16,14 +18,19 @@ from .models import (
     WorkspaceRecord,
 )
 from .schemas import (
+    AgentCatalog,
+    AgentDevice,
     HealthMetricOut,
     HealthWorkoutOut,
     HostedWorkspaceResponse,
+    MetricDailySummary,
     MetricListResponse,
+    PageInfo,
     SyncBatchListResponse,
     SyncBatchOut,
     SyncPayloadIn,
     UploadResult,
+    WorkoutDailySummary,
     WorkoutListResponse,
 )
 from .tokens import generate_token, token_hash
@@ -231,8 +238,14 @@ def list_metrics(
     if end_at:
         stmt = stmt.where(HealthMetricRecord.end_at <= end_at)
 
-    records = db.scalars(stmt.order_by(desc(HealthMetricRecord.start_at)).limit(limit).offset(offset)).all()
-    return MetricListResponse(items=[metric_record_to_schema(record) for record in records])
+    records = db.scalars(stmt.order_by(desc(HealthMetricRecord.start_at)).limit(limit + 1).offset(offset)).all()
+    has_more = len(records) > limit
+    page_records = records[:limit]
+    timezone_lookup = load_batch_timezones(db, page_records)
+    return MetricListResponse(
+        items=[metric_record_to_schema(record, timezone_lookup) for record in page_records],
+        page=PageInfo(limit=limit, offset=offset, has_more=has_more),
+    )
 
 
 def list_workouts(
@@ -258,8 +271,14 @@ def list_workouts(
     if end_at:
         stmt = stmt.where(HealthWorkoutRecord.end_at <= end_at)
 
-    records = db.scalars(stmt.order_by(desc(HealthWorkoutRecord.start_at)).limit(limit).offset(offset)).all()
-    return WorkoutListResponse(items=[workout_record_to_schema(record) for record in records])
+    records = db.scalars(stmt.order_by(desc(HealthWorkoutRecord.start_at)).limit(limit + 1).offset(offset)).all()
+    has_more = len(records) > limit
+    page_records = records[:limit]
+    timezone_lookup = load_batch_timezones(db, page_records)
+    return WorkoutListResponse(
+        items=[workout_record_to_schema(record, timezone_lookup) for record in page_records],
+        page=PageInfo(limit=limit, offset=offset, has_more=has_more),
+    )
 
 
 def list_sync_batches(
@@ -282,8 +301,13 @@ def list_sync_batches(
     if end_at:
         stmt = stmt.where(SyncBatchRecord.date_range_start <= end_at)
 
-    records = db.scalars(stmt.order_by(desc(SyncBatchRecord.received_at)).limit(limit).offset(offset)).all()
-    return SyncBatchListResponse(items=[sync_batch_record_to_schema(record) for record in records])
+    records = db.scalars(stmt.order_by(desc(SyncBatchRecord.received_at)).limit(limit + 1).offset(offset)).all()
+    has_more = len(records) > limit
+    page_records = records[:limit]
+    return SyncBatchListResponse(
+        items=[sync_batch_record_to_schema(record) for record in page_records],
+        page=PageInfo(limit=limit, offset=offset, has_more=has_more),
+    )
 
 
 def ensure_workspace(db: Session, workspace_id: str, created_at: datetime) -> None:
@@ -291,7 +315,108 @@ def ensure_workspace(db: Session, workspace_id: str, created_at: datetime) -> No
         db.add(WorkspaceRecord(id=workspace_id, created_at=created_at, label=None))
 
 
-def metric_record_to_schema(record: HealthMetricRecord) -> HealthMetricOut:
+def get_agent_catalog(db: Session, workspace_id: str) -> AgentCatalog:
+    metric_types = db.scalars(
+        select(HealthMetricRecord.type)
+        .where(HealthMetricRecord.workspace_id == workspace_id)
+        .distinct()
+        .order_by(HealthMetricRecord.type)
+    ).all()
+    activity_types = db.scalars(
+        select(HealthWorkoutRecord.activity_type)
+        .where(HealthWorkoutRecord.workspace_id == workspace_id)
+        .distinct()
+        .order_by(HealthWorkoutRecord.activity_type)
+    ).all()
+    timezones = db.scalars(
+        select(SyncBatchRecord.timezone)
+        .where(SyncBatchRecord.workspace_id == workspace_id)
+        .distinct()
+        .order_by(SyncBatchRecord.timezone)
+    ).all()
+    devices = db.scalars(
+        select(WorkspaceDeviceRecord)
+        .where(WorkspaceDeviceRecord.workspace_id == workspace_id)
+        .order_by(WorkspaceDeviceRecord.device_id)
+    ).all()
+    return AgentCatalog(
+        metric_types=list(metric_types),
+        activity_types=list(activity_types),
+        timezones=list(timezones),
+        devices=[AgentDevice(device_id=device.device_id, label=device.label) for device in devices],
+    )
+
+
+def summarize_metric_items(items: list[HealthMetricOut]) -> list[MetricDailySummary]:
+    grouped: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    for item in items:
+        grouped[(item.local_date, item.type, item.unit)].append(item.value)
+
+    summaries = []
+    for (local_date, metric_type, unit), values in sorted(grouped.items()):
+        total = sum(values)
+        summaries.append(
+            MetricDailySummary(
+                local_date=local_date,
+                type=metric_type,
+                unit=unit,
+                sample_count=len(values),
+                total_value=total,
+                average_value=total / len(values),
+                minimum_value=min(values),
+                maximum_value=max(values),
+            )
+        )
+    return summaries
+
+
+def summarize_workout_items(items: list[HealthWorkoutOut]) -> list[WorkoutDailySummary]:
+    grouped: dict[tuple[str, str], list[HealthWorkoutOut]] = defaultdict(list)
+    for item in items:
+        grouped[(item.local_date, item.activity_type)].append(item)
+
+    summaries = []
+    for (local_date, activity_type), workouts in sorted(grouped.items()):
+        distance_values = [workout.distance_meters for workout in workouts if workout.distance_meters is not None]
+        total_energy_values = [workout.total_energy_kcal for workout in workouts if workout.total_energy_kcal is not None]
+        active_energy_values = [workout.active_energy_kcal for workout in workouts if workout.active_energy_kcal is not None]
+        summaries.append(
+            WorkoutDailySummary(
+                local_date=local_date,
+                activity_type=activity_type,
+                workout_count=len(workouts),
+                duration_minutes=sum(workout.duration_seconds for workout in workouts) / 60,
+                distance_km=sum(distance_values) / 1000 if distance_values else None,
+                total_energy_kcal=sum(total_energy_values) if total_energy_values else None,
+                active_energy_kcal=sum(active_energy_values) if active_energy_values else None,
+            )
+        )
+    return summaries
+
+
+def load_batch_timezones(
+    db: Session,
+    records: list[HealthMetricRecord] | list[HealthWorkoutRecord],
+) -> dict[tuple[str, str], str]:
+    keys = {(record.workspace_id, record.export_id) for record in records}
+    if not keys:
+        return {}
+    workspace_ids = {workspace_id for workspace_id, _ in keys}
+    export_ids = {export_id for _, export_id in keys}
+    rows = db.execute(
+        select(SyncBatchRecord.workspace_id, SyncBatchRecord.export_id, SyncBatchRecord.timezone).where(
+            SyncBatchRecord.workspace_id.in_(workspace_ids),
+            SyncBatchRecord.export_id.in_(export_ids),
+        )
+    ).all()
+    return {(workspace_id, export_id): batch_timezone for workspace_id, export_id, batch_timezone in rows}
+
+
+def metric_record_to_schema(
+    record: HealthMetricRecord,
+    timezone_lookup: dict[tuple[str, str], str],
+) -> HealthMetricOut:
+    batch_timezone = timezone_lookup.get((record.workspace_id, record.export_id), "UTC")
     return HealthMetricOut(
         id=record.id,
         device_id=record.device_id,
@@ -300,6 +425,8 @@ def metric_record_to_schema(record: HealthMetricRecord) -> HealthMetricOut:
         unit=record.unit,
         start_at=record.start_at,
         end_at=record.end_at,
+        timezone=batch_timezone,
+        local_date=local_date_for(record.start_at, batch_timezone),
         source_name=record.source_name,
         source_bundle_id=record.source_bundle_id,
         metadata=record.metadata_json or {},
@@ -307,13 +434,19 @@ def metric_record_to_schema(record: HealthMetricRecord) -> HealthMetricOut:
     )
 
 
-def workout_record_to_schema(record: HealthWorkoutRecord) -> HealthWorkoutOut:
+def workout_record_to_schema(
+    record: HealthWorkoutRecord,
+    timezone_lookup: dict[tuple[str, str], str],
+) -> HealthWorkoutOut:
+    batch_timezone = timezone_lookup.get((record.workspace_id, record.export_id), "UTC")
     return HealthWorkoutOut(
         id=record.id,
         device_id=record.device_id,
         activity_type=record.activity_type,
         start_at=record.start_at,
         end_at=record.end_at,
+        timezone=batch_timezone,
+        local_date=local_date_for(record.start_at, batch_timezone),
         duration_seconds=record.duration_seconds,
         total_energy_kcal=record.total_energy_kcal,
         active_energy_kcal=record.active_energy_kcal,
@@ -339,3 +472,12 @@ def sync_batch_record_to_schema(record: SyncBatchRecord) -> SyncBatchOut:
         metrics_count=record.metrics_count,
         workouts_count=record.workouts_count,
     )
+
+
+def local_date_for(timestamp: datetime, batch_timezone: str) -> str:
+    timestamp = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
+    try:
+        local_timezone = ZoneInfo(batch_timezone)
+    except ZoneInfoNotFoundError:
+        local_timezone = timezone.utc
+    return timestamp.astimezone(local_timezone).date().isoformat()

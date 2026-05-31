@@ -164,6 +164,21 @@ curl -H "Authorization: Bearer $AGENT_TOKEN" \
   "https://api.example.com/api/agent/health-data"
 ```
 
+The agent response includes raw records plus digest fields designed for AI tools:
+
+- `agent_schema_version`
+- `page.limit`, `page.offset`, and `page.has_more`
+- `catalog.metric_types`, `catalog.activity_types`, `catalog.timezones`, and `catalog.devices`
+- `metrics[].timezone` and `metrics[].local_date`
+- `workouts[].timezone` and `workouts[].local_date`
+- `metric_daily_summaries`
+- `workout_daily_summaries`
+
+The database also exposes read-only SQL views for internal agent/reporting queries:
+
+- `agent_metric_daily_summaries`
+- `agent_workout_daily_summaries`
+
 Post a minimal sync payload:
 
 ```bash
