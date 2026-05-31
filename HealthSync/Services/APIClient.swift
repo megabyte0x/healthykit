@@ -25,7 +25,7 @@ enum APIClientError: LocalizedError, Equatable {
         case .missingToken:
             "Auth token is required before syncing."
         case .authRejected:
-            "The backend rejected the auth token."
+            "The saved backend token was rejected. For hosted storage, create hosted storage again; for your own backend, update the auth token."
         case let .transientFailure(message):
             message.isEmpty ? "Network unavailable or server temporarily unavailable." : message
         case let .serverRejected(statusCode):
@@ -90,6 +90,23 @@ final class APIClient: SyncUploading {
             .transient
         default:
             .permanent
+        }
+    }
+
+    static func networkFailureMessage(for error: URLError) -> String {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            "This iPhone lost network access. Check Wi-Fi or cellular and try again."
+        case .cannotFindHost, .dnsLookupFailed:
+            "Cannot find the backend host. Check the backend URL."
+        case .cannotConnectToHost, .secureConnectionFailed:
+            "Cannot connect to the backend. Check that the server is running and reachable from this iPhone."
+        case .timedOut:
+            "The backend connection timed out. Check the server and network, then try again."
+        case .appTransportSecurityRequiresSecureConnection:
+            "iOS blocked this connection. Use HTTPS for production, or a reachable LAN HTTP URL for local testing."
+        default:
+            "Network unavailable or server temporarily unavailable."
         }
     }
 
@@ -179,6 +196,11 @@ final class APIClient: SyncUploading {
                     if attempt < maxAttempts - 1 {
                         try await sleepBeforeRetry(attempt: attempt)
                     }
+                }
+            } catch let error as URLError {
+                lastTransientError = .transientFailure(Self.networkFailureMessage(for: error))
+                if attempt < maxAttempts - 1 {
+                    try await sleepBeforeRetry(attempt: attempt)
                 }
             } catch {
                 lastTransientError = .transientFailure("Network unavailable or server temporarily unavailable.")

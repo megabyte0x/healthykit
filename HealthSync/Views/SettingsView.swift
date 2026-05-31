@@ -33,20 +33,18 @@ struct HostedStorageSetupPresentation: Equatable {
         if isBusy {
             return "Creating Hosted Storage..."
         }
-
-        return hasAgentAccess ? "Hosted Storage Created" : "Create Hosted Storage"
+        return hasAgentAccess ? "Refresh Hosted Storage" : "Create Hosted Storage"
     }
 
     var createButtonSystemImage: String {
         if isBusy {
             return "hourglass"
         }
-
-        return hasAgentAccess ? "checkmark.circle" : "externaldrive.badge.plus"
+        return hasAgentAccess ? "arrow.clockwise" : "externaldrive.badge.plus"
     }
 
     var isCreateButtonDisabled: Bool {
-        isBusy || hasAgentAccess
+        isBusy
     }
 
     var progressMessage: String? {
@@ -143,6 +141,14 @@ struct SettingsView: View {
                         }
                         .disabled(presentation.isCreateButtonDisabled)
                         .accessibilityIdentifier("create-hosted-storage-button")
+
+                        Button {
+                            Task { await appState.testConnection() }
+                        } label: {
+                            Label("Test hosted connection", systemImage: "network")
+                        }
+                        .disabled(appState.isBusy || !hasAgentAccess)
+                        .accessibilityIdentifier("test-hosted-connection-button")
                     }
                 } header: {
                     Text("Storage Destination")

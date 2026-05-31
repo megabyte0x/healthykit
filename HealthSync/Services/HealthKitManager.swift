@@ -20,6 +20,7 @@ struct HealthKitIncrementalResult: Equatable {
 
 enum HealthKitManagerError: LocalizedError {
     case healthDataUnavailable
+    case authorizationNotDetermined
     case unsupportedType(HealthDataType)
     case missingAnchor
 
@@ -27,11 +28,21 @@ enum HealthKitManagerError: LocalizedError {
         switch self {
         case .healthDataUnavailable:
             "Health data is not available on this device."
+        case .authorizationNotDetermined:
+            "Apple Health permissions are not set up yet. Tap Connect Apple Health and allow the requested read permissions."
         case let .unsupportedType(type):
             "HealthKit type is not available: \(type.label)."
         case .missingAnchor:
             "HealthKit did not return an incremental sync anchor."
         }
+    }
+
+    static func map(_ error: Error) -> Error {
+        guard let healthKitError = error as? HKError else { return error }
+        if healthKitError.code == .errorAuthorizationNotDetermined {
+            return HealthKitManagerError.authorizationNotDetermined
+        }
+        return error
     }
 }
 
@@ -209,7 +220,7 @@ final class HealthKitManager {
                 sortDescriptors: nil
             ) { _, samples, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: HealthKitManagerError.map(error))
                 } else {
                     continuation.resume(returning: samples ?? [])
                 }
@@ -227,7 +238,7 @@ final class HealthKitManager {
                 limit: HKObjectQueryNoLimit
             ) { _, samples, _, newAnchor, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: HealthKitManagerError.map(error))
                 } else {
                     continuation.resume(returning: (samples ?? [], newAnchor))
                 }

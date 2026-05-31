@@ -163,6 +163,7 @@ final class AppState: ObservableObject {
     func syncIncremental() async {
         await runBusy {
             guard let store, let syncEngine else { throw APIClientError.invalidResponse }
+            try await ensureHealthPermissionsRequested()
             var anchors: [HealthDataType: String] = [:]
             for type in settings.selectedTypes {
                 if let anchor = try await store.loadAnchor(for: type) {
@@ -202,6 +203,7 @@ final class AppState: ObservableObject {
 
     private func syncDateRangeThrowing(start: Date, end: Date) async throws {
         guard let store, let syncEngine else { throw APIClientError.invalidResponse }
+        try await ensureHealthPermissionsRequested()
         let fetchResult = try await healthKit.fetchSamples(types: settings.selectedTypes, start: start, end: end)
         let payload = try normalizer.payload(
             deviceID: try await store.deviceID(),
@@ -222,6 +224,16 @@ final class AppState: ObservableObject {
     private func saveSettingsOnly() async throws {
         guard let store else { throw APIClientError.invalidResponse }
         try await store.saveSettings(settings)
+    }
+
+    private func ensureHealthPermissionsRequested() async throws {
+        guard !settings.hasRequestedHealthPermissions else { return }
+        try await healthKit.requestReadPermissions(for: settings.selectedTypes)
+        settings.hasRequestedHealthPermissions = true
+        shouldShowOnboarding = false
+        permissionSummary = "Requested"
+        try await saveSettingsOnly()
+        startObserversIfPossible()
     }
 
     private func uploadConfiguration() async throws -> UploadConfiguration {
