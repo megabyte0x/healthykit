@@ -230,6 +230,8 @@ async function ingestSync(req: Request): Promise<Response> {
     ok: true,
     received: metrics.length + workouts.length,
     duplicates,
+    workspace_id: auth.workspaceId,
+    export_id: exportId,
   });
 }
 

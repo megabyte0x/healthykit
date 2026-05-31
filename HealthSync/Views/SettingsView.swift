@@ -187,6 +187,30 @@ struct SettingsView: View {
 
                 if appState.settings.storageMode == .hostedHealthSync && hasAgentAccess {
                     Section {
+                        if !hostedWorkspaceID.isEmpty {
+                            Button {
+                                copyToPasteboard(hostedWorkspaceID)
+                            } label: {
+                                Label("Copy workspace ID", systemImage: "number")
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Workspace ID")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+
+                                Text(hostedWorkspaceID)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.primary.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .padding(.vertical, 4)
+                        }
+
                         if !hostedAgentEndpoint.isEmpty {
                             Button {
                                 copyToPasteboard(hostedAgentEndpoint)
@@ -302,6 +326,11 @@ struct SettingsView: View {
 
     private var hostedAgentEndpoint: String {
         appState.settings.hostedAgentEndpoint?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var hostedWorkspaceID: String {
+        appState.settings.hostedWorkspaceID?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 

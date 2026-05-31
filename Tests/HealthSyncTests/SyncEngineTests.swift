@@ -150,6 +150,25 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertNotNil(lastSuccessfulSyncAt)
     }
 
+    func testSuccessfulUploadLogIncludesWorkspaceWhenBackendReturnsIt() async throws {
+        let store = SyncEngineTestsStore()
+        let engine = SyncEngine(store: store, uploader: WorkspaceIdentifyingUploader())
+        let payload = SyncPayload.empty(
+            deviceID: "device-123",
+            dateRange: SyncDateRange(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 60)),
+            timezone: "Asia/Kolkata"
+        )
+
+        _ = try await engine.queue(payload: payload)
+        _ = await engine.uploadPending(
+            configuration: UploadConfiguration(baseURL: "https://example.com", token: "secret-token", deviceID: "device-123", appVersion: "1.0")
+        )
+
+        let logs = await store.logs
+        XCTAssertTrue(logs.contains { $0.message.contains("workspace wk_test") })
+        XCTAssertFalse(logs.contains { $0.message.contains("secret-token") })
+    }
+
     func testConcurrentUploadPendingDoesNotUploadSameBatchTwice() async throws {
         let store = SyncEngineTestsStore()
         let uploader = PausingUploader()
@@ -183,5 +202,17 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(uploadCountWhileFirstRunIsActive, 1)
         XCTAssertEqual(firstResult.uploadedCount, 1)
         XCTAssertEqual(secondResult.uploadedCount, 0)
+    }
+}
+
+final actor WorkspaceIdentifyingUploader: SyncUploading {
+    func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult {
+        UploadResult(
+            ok: true,
+            received: batch.payload.metrics.count + batch.payload.workouts.count,
+            duplicates: 0,
+            workspaceID: "wk_test",
+            exportID: batch.payload.exportID.uuidString
+        )
     }
 }

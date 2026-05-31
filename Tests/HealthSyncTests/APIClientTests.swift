@@ -48,6 +48,15 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
         XCTAssertEqual(String(data: request.httpBody ?? Data(), encoding: .utf8), #"{"label":"Personal Health"}"#)
     }
+
+    func testUploadResultDecodesWorkspaceIdentity() throws {
+        let data = Data(#"{"ok":true,"received":3,"duplicates":1,"workspace_id":"wk_test","export_id":"export-123"}"#.utf8)
+
+        let result = try JSONDecoder().decode(UploadResult.self, from: data)
+
+        XCTAssertEqual(result.workspaceID, "wk_test")
+        XCTAssertEqual(result.exportID, "export-123")
+    }
 }
 
 final class AppSettingsHostedEndpointTests: XCTestCase {

@@ -62,7 +62,8 @@ actor SyncEngine {
                     try await store.markBatchUploaded(id: batch.id, result: result)
                     try await store.recordSyncSuccess(at: Date())
                     uploaded += 1
-                    let message = "Uploaded batch \(batch.payload.exportID.uuidString) (\(result.received) received, \(result.duplicates) duplicates)."
+                    let workspaceDetail = result.workspaceID.map { " to workspace \($0)" } ?? ""
+                    let message = "Uploaded batch \(batch.payload.exportID.uuidString)\(workspaceDetail) (\(result.received) received, \(result.duplicates) duplicates)."
                     messages.append(message)
                     try await store.appendLog(SyncLogEntry(level: .success, message: message))
                 } catch {

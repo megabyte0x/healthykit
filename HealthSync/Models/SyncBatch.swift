@@ -29,4 +29,22 @@ struct UploadResult: Codable, Equatable {
     let ok: Bool
     let received: Int
     let duplicates: Int
+    let workspaceID: String?
+    let exportID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+        case received
+        case duplicates
+        case workspaceID = "workspace_id"
+        case exportID = "export_id"
+    }
+
+    init(ok: Bool, received: Int, duplicates: Int, workspaceID: String? = nil, exportID: String? = nil) {
+        self.ok = ok
+        self.received = received
+        self.duplicates = duplicates
+        self.workspaceID = workspaceID
+        self.exportID = exportID
+    }
 }
