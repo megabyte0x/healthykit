@@ -93,9 +93,10 @@ Deno.serve(async (req: Request) => {
 });
 
 function normalizePath(pathname: string): string {
-  const prefix = "/functions/v1/healthsync";
-  if (pathname.startsWith(prefix)) {
-    return pathname.slice(prefix.length) || "/";
+  for (const prefix of ["/functions/v1/healthsync", "/healthsync"]) {
+    if (pathname.startsWith(prefix)) {
+      return pathname.slice(prefix.length) || "/";
+    }
   }
 
   return pathname;
