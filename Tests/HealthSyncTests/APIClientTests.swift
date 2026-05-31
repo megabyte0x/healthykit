@@ -143,5 +143,8 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
 
         XCTAssertEqual(presentation.feedbackMessage, "Hosted storage is ready.")
         XCTAssertEqual(presentation.feedbackKind, .success)
+        XCTAssertEqual(presentation.createButtonTitle, "Hosted Storage Created")
+        XCTAssertEqual(presentation.createButtonSystemImage, "checkmark.circle")
+        XCTAssertTrue(presentation.isCreateButtonDisabled)
     }
 }
