@@ -28,10 +28,14 @@ struct HostedStorageSetupPresentation: Equatable {
     let lastError: String?
     let hostedAgentEndpoint: String?
     let hostedAgentToken: String
+    let hasStoredUploadToken: Bool
 
     var createButtonTitle: String {
         if isBusy {
             return "Creating Hosted Storage..."
+        }
+        if hasUsableHostedStorage {
+            return "Hosted Storage Created"
         }
         return hasAgentAccess ? "Refresh Hosted Storage" : "Create Hosted Storage"
     }
@@ -40,11 +44,14 @@ struct HostedStorageSetupPresentation: Equatable {
         if isBusy {
             return "hourglass"
         }
+        if hasUsableHostedStorage {
+            return "checkmark.circle"
+        }
         return hasAgentAccess ? "arrow.clockwise" : "externaldrive.badge.plus"
     }
 
     var isCreateButtonDisabled: Bool {
-        isBusy
+        isBusy || hasUsableHostedStorage
     }
 
     var progressMessage: String? {
@@ -56,8 +63,11 @@ struct HostedStorageSetupPresentation: Equatable {
             return errorMessage
         }
 
-        if hasAgentAccess {
+        if hasUsableHostedStorage {
             return "Hosted storage is ready."
+        }
+        if hasAgentAccess {
+            return "Hosted storage needs refresh before uploads can reach the agent endpoint."
         }
 
         return nil
@@ -68,8 +78,11 @@ struct HostedStorageSetupPresentation: Equatable {
             return .error
         }
 
-        if hasAgentAccess {
+        if hasUsableHostedStorage {
             return .success
+        }
+        if hasAgentAccess {
+            return .info
         }
 
         return .none
@@ -77,6 +90,10 @@ struct HostedStorageSetupPresentation: Equatable {
 
     private var hasAgentAccess: Bool {
         !(trimmed(hostedAgentEndpoint) ?? "").isEmpty || !(trimmed(hostedAgentToken) ?? "").isEmpty
+    }
+
+    private var hasUsableHostedStorage: Bool {
+        hasAgentAccess && hasStoredUploadToken
     }
 
     private func trimmed(_ value: String?) -> String? {
@@ -147,7 +164,7 @@ struct SettingsView: View {
                         } label: {
                             Label("Test hosted connection", systemImage: "network")
                         }
-                        .disabled(appState.isBusy || !hasAgentAccess)
+                        .disabled(appState.isBusy || !appState.hasStoredToken)
                         .accessibilityIdentifier("test-hosted-connection-button")
                     }
                 } header: {
@@ -346,7 +363,8 @@ struct SettingsView: View {
             backendURL: appState.settings.backendURL,
             lastError: appState.lastError,
             hostedAgentEndpoint: appState.settings.hostedAgentEndpoint,
-            hostedAgentToken: appState.hostedAgentToken
+            hostedAgentToken: appState.hostedAgentToken,
+            hasStoredUploadToken: appState.hasStoredToken
         )
     }
 

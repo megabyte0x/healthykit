@@ -163,7 +163,8 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
             backendURL: "https://api.example.com",
             lastError: nil,
             hostedAgentEndpoint: nil,
-            hostedAgentToken: ""
+            hostedAgentToken: "",
+            hasStoredUploadToken: false
         )
 
         XCTAssertEqual(presentation.createButtonTitle, "Creating Hosted Storage...")
@@ -178,7 +179,8 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
             backendURL: "",
             lastError: nil,
             hostedAgentEndpoint: nil,
-            hostedAgentToken: ""
+            hostedAgentToken: "",
+            hasStoredUploadToken: false
         )
 
         XCTAssertFalse(presentation.isCreateButtonDisabled)
@@ -192,7 +194,8 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
             backendURL: "https://api.example.com",
             lastError: "Network unavailable or server temporarily unavailable.",
             hostedAgentEndpoint: nil,
-            hostedAgentToken: ""
+            hostedAgentToken: "",
+            hasStoredUploadToken: false
         )
 
         XCTAssertEqual(presentation.feedbackMessage, "Network unavailable or server temporarily unavailable.")
@@ -206,26 +209,31 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
             backendURL: "https://api.example.com",
             lastError: nil,
             hostedAgentEndpoint: "https://api.example.com/api/agent/health-data",
-            hostedAgentToken: ""
+            hostedAgentToken: "",
+            hasStoredUploadToken: true
         )
 
         XCTAssertEqual(presentation.feedbackMessage, "Hosted storage is ready.")
         XCTAssertEqual(presentation.feedbackKind, .success)
-        XCTAssertEqual(presentation.createButtonTitle, "Refresh Hosted Storage")
-        XCTAssertEqual(presentation.createButtonSystemImage, "arrow.clockwise")
-        XCTAssertFalse(presentation.isCreateButtonDisabled)
+        XCTAssertEqual(presentation.createButtonTitle, "Hosted Storage Created")
+        XCTAssertEqual(presentation.createButtonSystemImage, "checkmark.circle")
+        XCTAssertTrue(presentation.isCreateButtonDisabled)
     }
 
-    func testExistingHostedStorageOffersRefreshAction() {
+    func testExistingHostedStorageWithoutUploadTokenOffersRepairAction() {
         let presentation = HostedStorageSetupPresentation(
             isBusy: false,
             backendURL: "https://api.example.com",
             lastError: nil,
             hostedAgentEndpoint: "https://api.example.com/api/agent/health-data",
-            hostedAgentToken: "agent-token"
+            hostedAgentToken: "agent-token",
+            hasStoredUploadToken: false
         )
 
+        XCTAssertEqual(presentation.feedbackMessage, "Hosted storage needs refresh before uploads can reach the agent endpoint.")
+        XCTAssertEqual(presentation.feedbackKind, .info)
         XCTAssertEqual(presentation.createButtonTitle, "Refresh Hosted Storage")
         XCTAssertEqual(presentation.createButtonSystemImage, "arrow.clockwise")
+        XCTAssertFalse(presentation.isCreateButtonDisabled)
     }
 }

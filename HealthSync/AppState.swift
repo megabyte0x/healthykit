@@ -96,8 +96,11 @@ final class AppState: ObservableObject {
             let existingAgentEndpoint = settings.hostedAgentEndpoint?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let existingAgentToken = hostedAgentToken.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard existingAgentEndpoint.isEmpty && existingAgentToken.isEmpty else {
+            let existingIngestToken = (try keychain.readHostedIngestToken() ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard existingAgentEndpoint.isEmpty || existingAgentToken.isEmpty || existingIngestToken.isEmpty else {
                 settings.storageMode = .hostedHealthSync
+                hasStoredToken = true
                 try await saveSettingsOnly()
                 restartPeriodicSync()
                 return
