@@ -68,24 +68,26 @@ struct AppSettings: Codable, Equatable {
 
     static let `default` = AppSettings(
         backendURL: "",
-        selectedTypes: [
-            .stepCount,
-            .heartRate,
-            .restingHeartRate,
-            .hrvSDNN,
-            .activeEnergy,
-            .basalEnergy,
-            .bodyMass,
-            .bodyFatPercentage,
-            .sleepAnalysis,
-            .workouts
-        ],
+        selectedTypes: Set(HealthDataType.allCases),
         syncFrequency: .manualOnly,
         hasRequestedHealthPermissions: false,
         storageMode: .customBackend,
         hostedWorkspaceID: nil,
         hostedAgentEndpoint: nil
     )
+
+    private static let legacyDefaultSelectedTypes: Set<HealthDataType> = [
+        .stepCount,
+        .heartRate,
+        .restingHeartRate,
+        .hrvSDNN,
+        .activeEnergy,
+        .basalEnergy,
+        .bodyMass,
+        .bodyFatPercentage,
+        .sleepAnalysis,
+        .workouts
+    ]
 
     var effectiveBackendURL: String {
         switch storageMode {
@@ -117,12 +119,18 @@ struct AppSettings: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         backendURL = try container.decode(String.self, forKey: .backendURL)
-        selectedTypes = try container.decode(Set<HealthDataType>.self, forKey: .selectedTypes)
+        let decodedSelectedTypes = try container.decode(Set<HealthDataType>.self, forKey: .selectedTypes)
+        selectedTypes = Self.selectedTypesWithDefaultDietaryTypes(decodedSelectedTypes)
         syncFrequency = try container.decode(SyncFrequency.self, forKey: .syncFrequency)
         hasRequestedHealthPermissions = try container.decode(Bool.self, forKey: .hasRequestedHealthPermissions)
         storageMode = try container.decodeIfPresent(StorageMode.self, forKey: .storageMode) ?? .customBackend
         hostedWorkspaceID = try container.decodeIfPresent(String.self, forKey: .hostedWorkspaceID)
         hostedAgentEndpoint = try container.decodeIfPresent(String.self, forKey: .hostedAgentEndpoint)
+    }
+
+    private static func selectedTypesWithDefaultDietaryTypes(_ selectedTypes: Set<HealthDataType>) -> Set<HealthDataType> {
+        guard selectedTypes == legacyDefaultSelectedTypes else { return selectedTypes }
+        return selectedTypes.union(HealthDataType.dietaryTypes)
     }
 }
 

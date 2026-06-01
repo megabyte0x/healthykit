@@ -40,43 +40,26 @@ SELF_HOSTED_WORKSPACE_ID = "self_hosted"
 
 
 def provision_hosted_workspace(db: Session, settings: Settings, label: str | None) -> HostedWorkspaceResponse:
-    created_at = datetime.now(timezone.utc)
-    workspace_id = generate_token("wk")
-    ingest_token = generate_token("hs_ingest")
-    agent_token = generate_token("hs_agent")
-
     try:
-        db.add(WorkspaceRecord(id=workspace_id, created_at=created_at, label=label))
-        db.add_all(
-            [
-                AccessTokenRecord(
-                    id=generate_token("tok"),
-                    workspace_id=workspace_id,
-                    kind="ingest",
-                    token_hash=token_hash(ingest_token, settings.token_hash_secret),
-                    created_at=created_at,
-                ),
-                AccessTokenRecord(
-                    id=generate_token("tok"),
-                    workspace_id=workspace_id,
-                    kind="agent_read",
-                    token_hash=token_hash(agent_token, settings.token_hash_secret),
-                    created_at=created_at,
-                ),
-            ]
-        )
+        response = add_hosted_workspace(db, settings, label)
         db.commit()
     except Exception:
         db.rollback()
         raise
 
-    return HostedWorkspaceResponse(
-        workspace_id=workspace_id,
-        backend_url=settings.hosted_public_base_url,
-        ingest_token=ingest_token,
-        agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
-        agent_token=agent_token,
-    )
+    return response
+
+
+def reset_hosted_workspace(db: Session, settings: Settings, workspace_id: str, label: str | None) -> HostedWorkspaceResponse:
+    try:
+        delete_hosted_workspace_rows(db, workspace_id)
+        response = add_hosted_workspace(db, settings, label)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return response
 
 
 def rotate_hosted_agent_token(db: Session, settings: Settings, workspace_id: str) -> HostedAgentTokenResponse:
@@ -115,6 +98,53 @@ def rotate_hosted_agent_token(db: Session, settings: Settings, workspace_id: str
         agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
         agent_token=agent_token,
     )
+
+
+def add_hosted_workspace(db: Session, settings: Settings, label: str | None) -> HostedWorkspaceResponse:
+    created_at = datetime.now(timezone.utc)
+    workspace_id = generate_token("wk")
+    ingest_token = generate_token("hs_ingest")
+    agent_token = generate_token("hs_agent")
+
+    db.add(WorkspaceRecord(id=workspace_id, created_at=created_at, label=label))
+    db.add_all(
+        [
+            AccessTokenRecord(
+                id=generate_token("tok"),
+                workspace_id=workspace_id,
+                kind="ingest",
+                token_hash=token_hash(ingest_token, settings.token_hash_secret),
+                created_at=created_at,
+            ),
+            AccessTokenRecord(
+                id=generate_token("tok"),
+                workspace_id=workspace_id,
+                kind="agent_read",
+                token_hash=token_hash(agent_token, settings.token_hash_secret),
+                created_at=created_at,
+            ),
+        ]
+    )
+
+    return HostedWorkspaceResponse(
+        workspace_id=workspace_id,
+        backend_url=settings.hosted_public_base_url,
+        ingest_token=ingest_token,
+        agent_endpoint=f"{settings.hosted_public_base_url}/api/agent/health-data",
+        agent_token=agent_token,
+    )
+
+
+def delete_hosted_workspace_rows(db: Session, workspace_id: str) -> None:
+    for model in (
+        HealthMetricRecord,
+        HealthWorkoutRecord,
+        SyncBatchRecord,
+        WorkspaceDeviceRecord,
+        AccessTokenRecord,
+    ):
+        db.query(model).filter(model.workspace_id == workspace_id).delete(synchronize_session=False)
+    db.query(WorkspaceRecord).filter(WorkspaceRecord.id == workspace_id).delete(synchronize_session=False)
 
 
 def persist_sync_payload(
@@ -156,6 +186,10 @@ def persist_sync_payload(
             )
         else:
             workspace_device.last_seen_at = received_at
+
+        if not payload.metrics and not payload.workouts:
+            db.commit()
+            return UploadResult(ok=True, received=0, duplicates=0)
 
         batch = db.get(SyncBatchRecord, (workspace_id, export_id))
         if batch is None:

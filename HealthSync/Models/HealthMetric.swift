@@ -40,6 +40,46 @@ struct SyncPayload: Codable, Equatable {
     let metrics: [HealthMetric]
     let workouts: [HealthWorkout]
 
+    var isEmpty: Bool {
+        metrics.isEmpty && workouts.isEmpty
+    }
+
+    func chunked(maxRecords: Int) -> [SyncPayload] {
+        let recordLimit = max(1, maxRecords)
+        guard metrics.count + workouts.count > recordLimit else { return [self] }
+
+        var chunks: [SyncPayload] = []
+        var metricIndex = metrics.startIndex
+        while metricIndex < metrics.endIndex {
+            let nextIndex = metrics.index(metricIndex, offsetBy: recordLimit, limitedBy: metrics.endIndex) ?? metrics.endIndex
+            chunks.append(copy(metrics: Array(metrics[metricIndex..<nextIndex]), workouts: []))
+            metricIndex = nextIndex
+        }
+
+        var workoutIndex = workouts.startIndex
+        while workoutIndex < workouts.endIndex {
+            let nextIndex = workouts.index(workoutIndex, offsetBy: recordLimit, limitedBy: workouts.endIndex) ?? workouts.endIndex
+            chunks.append(copy(metrics: [], workouts: Array(workouts[workoutIndex..<nextIndex])))
+            workoutIndex = nextIndex
+        }
+
+        return chunks
+    }
+
+    private func copy(metrics: [HealthMetric], workouts: [HealthWorkout]) -> SyncPayload {
+        SyncPayload(
+            deviceID: deviceID,
+            exportID: UUID(),
+            generatedAt: generatedAt,
+            timezone: timezone,
+            source: source,
+            schemaVersion: schemaVersion,
+            dateRange: dateRange,
+            metrics: metrics,
+            workouts: workouts
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case deviceID = "device_id"
         case exportID = "export_id"

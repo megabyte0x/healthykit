@@ -46,17 +46,35 @@ actor SyncEngine {
         isUploading = true
         defer { isUploading = false }
 
+        do {
+            let pending = try await store.pendingBatches()
+            return await upload(batches: pending, configuration: configuration)
+        } catch {
+            let message = safeMessage(from: error, token: configuration.token)
+            try? await store.appendLog(SyncLogEntry(level: .error, message: message))
+            return SyncRunResult(uploadedCount: 0, failedCount: 1, messages: [message])
+        }
+    }
+
+    func uploadQueuedBatch(_ batch: SyncBatch, configuration: UploadConfiguration) async -> SyncRunResult {
+        guard !isUploading else { return .empty }
+        isUploading = true
+        defer { isUploading = false }
+
+        return await upload(batches: [batch], configuration: configuration)
+    }
+
+    private func upload(batches: [SyncBatch], configuration: UploadConfiguration) async -> SyncRunResult {
         let attemptedAt = Date()
         do {
             try await store.recordSyncAttempt(at: attemptedAt)
-            let pending = try await store.pendingBatches()
-            guard !pending.isEmpty else { return .empty }
+            guard !batches.isEmpty else { return .empty }
 
             var uploaded = 0
             var failed = 0
             var messages: [String] = []
 
-            for batch in pending {
+            for batch in batches {
                 do {
                     let result = try await uploader.upload(batch: batch, configuration: configuration)
                     try await store.markBatchUploaded(id: batch.id, result: result)

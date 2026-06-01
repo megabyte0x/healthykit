@@ -102,6 +102,27 @@ def test_sync_persists_and_dedupes_records(tmp_path: Path) -> None:
     assert second.json() == {"ok": True, "received": 2, "duplicates": 2}
 
 
+def test_empty_sync_is_accepted_without_persisting_empty_batch(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    payload = sample_payload()
+    payload["metrics"] = []
+    payload["workouts"] = []
+
+    response = client.post(
+        "/api/apple-health/sync",
+        headers={"Authorization": f"Bearer {provisioned['ingest_token']}", "X-App-Version": "1.0"},
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "received": 0, "duplicates": 0}
+    with client.app.state.session_factory() as db:
+        from backend.models import SyncBatchRecord
+
+        assert db.query(SyncBatchRecord).count() == 0
+
+
 def test_fetch_metrics_workouts_and_syncs(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     headers = {"Authorization": "Bearer test-token"}
@@ -241,6 +262,57 @@ def test_hosted_agent_token_rotation_rejects_agent_token(tmp_path: Path) -> None
     )
 
     assert response.status_code == 403
+
+
+def test_hosted_workspace_reset_deletes_current_workspace_and_returns_new_host(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    other = client.post("/api/hosted/workspaces", json={"label": "Other Device"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+    old_agent_headers = {"Authorization": f"Bearer {provisioned['agent_token']}"}
+
+    client.post("/api/apple-health/sync", headers=ingest_headers, json=sample_payload())
+    client.post(
+        "/api/apple-health/sync",
+        headers={"Authorization": f"Bearer {other['ingest_token']}"},
+        json=sample_payload("22222222-2222-4222-8222-222222222222"),
+    )
+
+    response = client.post(
+        "/api/hosted/workspaces/reset",
+        headers=ingest_headers,
+        json={"label": "Personal Health"},
+    )
+
+    assert response.status_code == 200
+    reset = response.json()
+    assert reset["workspace_id"].startswith("wk_")
+    assert reset["workspace_id"] != provisioned["workspace_id"]
+    assert reset["backend_url"] == "https://healthsync.example.test"
+    assert reset["ingest_token"].startswith("hs_ingest_")
+    assert reset["agent_token"].startswith("hs_agent_")
+    assert reset["agent_endpoint"] == "https://healthsync.example.test/api/agent/health-data"
+
+    assert client.get("/api/agent/health-data", headers=old_agent_headers).status_code == 403
+    assert client.post("/api/apple-health/sync", headers=ingest_headers, json=sample_payload()).status_code == 403
+
+    new_read = client.get(
+        "/api/agent/health-data",
+        headers={"Authorization": f"Bearer {reset['agent_token']}"},
+    )
+    assert new_read.status_code == 200
+    assert new_read.json()["workspace_id"] == reset["workspace_id"]
+    assert new_read.json()["metrics"] == []
+    assert new_read.json()["workouts"] == []
+    assert new_read.json()["syncs"] == []
+
+    other_read = client.get(
+        "/api/agent/health-data",
+        headers={"Authorization": f"Bearer {other['agent_token']}"},
+    )
+    assert other_read.status_code == 200
+    assert other_read.json()["workspace_id"] == other["workspace_id"]
+    assert [item["export_id"] for item in other_read.json()["syncs"]] == ["22222222-2222-4222-8222-222222222222"]
 
 
 def test_agent_endpoint_returns_only_own_workspace_data(tmp_path: Path) -> None:

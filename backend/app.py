@@ -18,6 +18,7 @@ from .repository import (
     list_workouts,
     persist_sync_payload,
     provision_hosted_workspace,
+    reset_hosted_workspace,
     rotate_hosted_agent_token,
     summarize_metric_items,
     summarize_workout_items,
@@ -89,6 +90,16 @@ def create_app(
         if not settings.hosted_provisioning_enabled:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
         return provision_hosted_workspace(db, settings, payload.label)
+
+    @app.post("/api/hosted/workspaces/reset", response_model=HostedWorkspaceResponse)
+    def hosted_workspaces_reset(
+        payload: HostedWorkspaceCreate,
+        auth: AuthContext = Depends(require_sync_auth),
+        db: Session = Depends(get_db),
+    ) -> HostedWorkspaceResponse:
+        if not settings.hosted_provisioning_enabled or auth.self_hosted:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bearer token")
+        return reset_hosted_workspace(db, settings, auth.workspace_id, payload.label)
 
     @app.post("/api/hosted/agent-token", response_model=HostedAgentTokenResponse)
     def hosted_agent_token(

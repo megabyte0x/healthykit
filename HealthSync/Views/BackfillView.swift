@@ -79,6 +79,34 @@ struct BackfillView: View {
                             }
                         }
                         .padding(.vertical, 8)
+                    } else if let backfillError = appState.backfillError, !appState.isBusy {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(HealthSyncTheme.primaryRed.opacity(0.1))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(HealthSyncTheme.primaryRed)
+                                    .font(.title3)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Backfill Failed")
+                                    .font(.subheadline.weight(.bold))
+                                Text(backfillError)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                            }
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(HealthSyncTheme.primaryRed.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(HealthSyncTheme.primaryRed.opacity(0.2), lineWidth: 1)
+                        )
                     } else if appState.backfillProgress == 1.0 && !appState.isBusy {
                         HStack(spacing: 12) {
                             ZStack {

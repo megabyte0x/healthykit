@@ -7,6 +7,7 @@ const tokenHashSecret = Deno.env.get("TOKEN_HASH_SECRET") ?? serviceRoleKey;
 const functionBaseUrl =
   Deno.env.get("HOSTED_PUBLIC_BASE_URL") ??
   "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync";
+const maxRowsPerDatabaseRequest = 100;
 
 const db = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -61,6 +62,10 @@ Deno.serve(async (req: Request) => {
       return await provisionWorkspace(req);
     }
 
+    if (path === "/api/hosted/workspaces/reset" && req.method === "POST") {
+      return await resetWorkspace(req);
+    }
+
     if (path === "/api/hosted/agent-token" && req.method === "POST") {
       return await rotateAgentToken(req);
     }
@@ -108,6 +113,17 @@ function normalizePath(pathname: string): string {
 
 async function provisionWorkspace(req: Request): Promise<Response> {
   const payload = await jsonBody(req);
+  return await createWorkspace(typeof payload.label === "string" ? payload.label : null);
+}
+
+async function resetWorkspace(req: Request): Promise<Response> {
+  const auth = await requireToken(req, "ingest");
+  const payload = await jsonBody(req);
+  await deleteWorkspaceRows(auth.workspaceId);
+  return await createWorkspace(typeof payload.label === "string" ? payload.label : null);
+}
+
+async function createWorkspace(label: string | null): Promise<Response> {
   const createdAt = new Date().toISOString();
   const workspaceId = randomToken("wk");
   const ingestToken = randomToken("hs_ingest");
@@ -117,7 +133,7 @@ async function provisionWorkspace(req: Request): Promise<Response> {
     db.from("workspaces").insert({
       id: workspaceId,
       created_at: createdAt,
-      label: typeof payload.label === "string" ? payload.label : null,
+      label,
     }),
   );
   await requireOk(
@@ -146,6 +162,13 @@ async function provisionWorkspace(req: Request): Promise<Response> {
     agent_endpoint: `${functionBaseUrl}/api/agent/health-data`,
     agent_token: agentToken,
   });
+}
+
+async function deleteWorkspaceRows(workspaceId: string): Promise<void> {
+  for (const table of ["health_metrics", "health_workouts", "sync_batches", "workspace_devices", "access_tokens"]) {
+    await requireOk(db.from(table).delete().eq("workspace_id", workspaceId));
+  }
+  await requireOk(db.from("workspaces").delete().eq("id", workspaceId));
 }
 
 async function rotateAgentToken(req: Request): Promise<Response> {
@@ -194,6 +217,21 @@ async function ingestSync(req: Request): Promise<Response> {
   await upsertDevice(deviceId, now, appVersion);
   await upsertWorkspaceDevice(auth.workspaceId, deviceId, now);
 
+  if (metrics.length === 0 && workouts.length === 0) {
+    console.info("healthsync_empty_ingest", {
+      workspace_id: auth.workspaceId,
+      export_id: exportId,
+      device_id: deviceId,
+    });
+    return json({
+      ok: true,
+      received: 0,
+      duplicates: 0,
+      workspace_id: auth.workspaceId,
+      export_id: exportId,
+    });
+  }
+
   const duplicates = await countExistingRows(auth.workspaceId, deviceId, metrics, workouts);
 
   await requireOk(
@@ -217,48 +255,46 @@ async function ingestSync(req: Request): Promise<Response> {
   );
 
   if (metrics.length > 0) {
-    await requireOk(
-      db.from("health_metrics").upsert(
-        metrics.map((metric: Record<string, unknown>) => ({
-          workspace_id: auth.workspaceId,
-          device_id: deviceId,
-          id: requiredString(metric.id, "metrics.id"),
-          type: requiredString(metric.type, "metrics.type"),
-          value: Number(metric.value),
-          unit: requiredString(metric.unit, "metrics.unit"),
-          start_at: requiredString(metric.start_at, "metrics.start_at"),
-          end_at: requiredString(metric.end_at, "metrics.end_at"),
-          source_name: requiredString(metric.source_name, "metrics.source_name"),
-          source_bundle_id: nullableString(metric.source_bundle_id),
-          metadata: isRecord(metric.metadata) ? metric.metadata : {},
-          export_id: exportId,
-        })),
-        { onConflict: "workspace_id,device_id,id" },
-      ),
+    await upsertRows(
+      "health_metrics",
+      metrics.map((metric: Record<string, unknown>) => ({
+        workspace_id: auth.workspaceId,
+        device_id: deviceId,
+        id: requiredString(metric.id, "metrics.id"),
+        type: requiredString(metric.type, "metrics.type"),
+        value: Number(metric.value),
+        unit: requiredString(metric.unit, "metrics.unit"),
+        start_at: requiredString(metric.start_at, "metrics.start_at"),
+        end_at: requiredString(metric.end_at, "metrics.end_at"),
+        source_name: requiredString(metric.source_name, "metrics.source_name"),
+        source_bundle_id: nullableString(metric.source_bundle_id),
+        metadata: isRecord(metric.metadata) ? metric.metadata : {},
+        export_id: exportId,
+      })),
+      "workspace_id,device_id,id",
     );
   }
 
   if (workouts.length > 0) {
-    await requireOk(
-      db.from("health_workouts").upsert(
-        workouts.map((workout: Record<string, unknown>) => ({
-          workspace_id: auth.workspaceId,
-          device_id: deviceId,
-          id: requiredString(workout.id, "workouts.id"),
-          activity_type: requiredString(workout.activity_type, "workouts.activity_type"),
-          start_at: requiredString(workout.start_at, "workouts.start_at"),
-          end_at: requiredString(workout.end_at, "workouts.end_at"),
-          duration_seconds: Number(workout.duration_seconds),
-          total_energy_kcal: nullableNumber(workout.total_energy_kcal),
-          active_energy_kcal: nullableNumber(workout.active_energy_kcal),
-          distance_meters: nullableNumber(workout.distance_meters),
-          source_name: requiredString(workout.source_name, "workouts.source_name"),
-          source_bundle_id: nullableString(workout.source_bundle_id),
-          metadata: isRecord(workout.metadata) ? workout.metadata : {},
-          export_id: exportId,
-        })),
-        { onConflict: "workspace_id,device_id,id" },
-      ),
+    await upsertRows(
+      "health_workouts",
+      workouts.map((workout: Record<string, unknown>) => ({
+        workspace_id: auth.workspaceId,
+        device_id: deviceId,
+        id: requiredString(workout.id, "workouts.id"),
+        activity_type: requiredString(workout.activity_type, "workouts.activity_type"),
+        start_at: requiredString(workout.start_at, "workouts.start_at"),
+        end_at: requiredString(workout.end_at, "workouts.end_at"),
+        duration_seconds: Number(workout.duration_seconds),
+        total_energy_kcal: nullableNumber(workout.total_energy_kcal),
+        active_energy_kcal: nullableNumber(workout.active_energy_kcal),
+        distance_meters: nullableNumber(workout.distance_meters),
+        source_name: requiredString(workout.source_name, "workouts.source_name"),
+        source_bundle_id: nullableString(workout.source_bundle_id),
+        metadata: isRecord(workout.metadata) ? workout.metadata : {},
+        export_id: exportId,
+      })),
+      "workspace_id,device_id,id",
     );
   }
 
@@ -584,32 +620,47 @@ async function countExistingRows(
 ): Promise<number> {
   const metricIds = metrics.map((metric) => String(metric.id)).filter(Boolean);
   const workoutIds = workouts.map((workout) => String(workout.id)).filter(Boolean);
-  const [metricRows, workoutRows] = await Promise.all([
-    metricIds.length > 0
-      ? db
-          .from("health_metrics")
-          .select("id")
-          .eq("workspace_id", workspaceId)
-          .eq("device_id", deviceId)
-          .in("id", metricIds)
-      : Promise.resolve({ data: [], error: null }),
-    workoutIds.length > 0
-      ? db
-          .from("health_workouts")
-          .select("id")
-          .eq("workspace_id", workspaceId)
-          .eq("device_id", deviceId)
-          .in("id", workoutIds)
-      : Promise.resolve({ data: [], error: null }),
+  const [metricCount, workoutCount] = await Promise.all([
+    countExistingIds("health_metrics", workspaceId, deviceId, metricIds),
+    countExistingIds("health_workouts", workspaceId, deviceId, workoutIds),
   ]);
-  if (metricRows.error) {
-    throw metricRows.error;
-  }
-  if (workoutRows.error) {
-    throw workoutRows.error;
-  }
+  return metricCount + workoutCount;
+}
 
-  return (metricRows.data?.length ?? 0) + (workoutRows.data?.length ?? 0);
+async function countExistingIds(
+  table: string,
+  workspaceId: string,
+  deviceId: string,
+  ids: string[],
+): Promise<number> {
+  let count = 0;
+  for (const idChunk of chunks(ids, maxRowsPerDatabaseRequest)) {
+    const { data, error } = await db
+      .from(table)
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("device_id", deviceId)
+      .in("id", idChunk);
+    if (error) {
+      throw error;
+    }
+    count += data?.length ?? 0;
+  }
+  return count;
+}
+
+async function upsertRows(table: string, rows: Record<string, unknown>[], onConflict: string): Promise<void> {
+  for (const rowChunk of chunks(rows, maxRowsPerDatabaseRequest)) {
+    await requireOk(db.from(table).upsert(rowChunk, { onConflict }));
+  }
+}
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
 }
 
 function readRange(url: URL): RangeInfo {

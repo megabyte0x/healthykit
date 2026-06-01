@@ -3,13 +3,14 @@ import HealthKit
 
 struct HealthKitFetchResult: Equatable {
     var quantitySamples: [HealthQuantitySampleDTO]
+    var categorySamples: [HealthCategorySampleDTO]
     var sleepSamples: [HealthSleepSampleDTO]
     var workoutSamples: [HealthWorkoutSampleDTO]
 
-    static let empty = HealthKitFetchResult(quantitySamples: [], sleepSamples: [], workoutSamples: [])
+    static let empty = HealthKitFetchResult(quantitySamples: [], categorySamples: [], sleepSamples: [], workoutSamples: [])
 
     var isEmpty: Bool {
-        quantitySamples.isEmpty && sleepSamples.isEmpty && workoutSamples.isEmpty
+        quantitySamples.isEmpty && categorySamples.isEmpty && sleepSamples.isEmpty && workoutSamples.isEmpty
     }
 }
 
@@ -18,10 +19,34 @@ struct HealthKitIncrementalResult: Equatable {
     let anchors: [HealthDataType: String]
 }
 
+private enum BackfillQuantityAggregationStrategy: String {
+    case dailySum = "daily_sum"
+    case dailyAverage = "daily_average"
+
+    var statisticsOptions: HKStatisticsOptions {
+        switch self {
+        case .dailySum:
+            .cumulativeSum
+        case .dailyAverage:
+            .discreteAverage
+        }
+    }
+
+    func value(from statistics: HKStatistics, unit: HKUnit) -> Double? {
+        switch self {
+        case .dailySum:
+            statistics.sumQuantity()?.doubleValue(for: unit)
+        case .dailyAverage:
+            statistics.averageQuantity()?.doubleValue(for: unit)
+        }
+    }
+}
+
 enum HealthKitManagerError: LocalizedError {
     case healthDataUnavailable
     case authorizationNotDetermined
     case unsupportedType(HealthDataType)
+    case statisticsUnavailable(HealthDataType)
     case missingAnchor
 
     var errorDescription: String? {
@@ -32,6 +57,8 @@ enum HealthKitManagerError: LocalizedError {
             "Apple Health permissions are not set up yet. Tap Connect Apple Health and allow the requested read permissions."
         case let .unsupportedType(type):
             "HealthKit type is not available: \(type.label)."
+        case let .statisticsUnavailable(type):
+            "HealthKit statistics are not available: \(type.label)."
         case .missingAnchor:
             "HealthKit did not return an incremental sync anchor."
         }
@@ -82,13 +109,48 @@ final class HealthKitManager {
         }
         var result = HealthKitFetchResult.empty
         for type in types {
+            guard HealthKitTypeRegistry.objectType(for: type) != nil else { continue }
             switch type {
             case .sleepAnalysis:
                 result.sleepSamples += try await sleepSamples(start: start, end: end)
             case .workouts:
                 result.workoutSamples += try await workoutSamples(start: start, end: end)
             default:
-                result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                if type.kind == .category {
+                    result.categorySamples += try await categorySamples(for: type, start: start, end: end)
+                } else {
+                    result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                }
+            }
+        }
+        return result
+    }
+
+    func fetchBackfillSamples(types: Set<HealthDataType>, start: Date, end: Date) async throws -> HealthKitFetchResult {
+        guard isHealthDataAvailable else {
+            throw HealthKitManagerError.healthDataUnavailable
+        }
+        var result = HealthKitFetchResult.empty
+        for type in types {
+            guard HealthKitTypeRegistry.objectType(for: type) != nil else { continue }
+            switch type {
+            case .sleepAnalysis:
+                result.sleepSamples += try await sleepSamples(start: start, end: end)
+            case .workouts:
+                result.workoutSamples += try await workoutSamples(start: start, end: end)
+            default:
+                if type.kind == .category {
+                    result.categorySamples += try await categorySamples(for: type, start: start, end: end)
+                } else if let strategy = backfillAggregationStrategy(for: type) {
+                    result.quantitySamples += try await aggregatedQuantitySamples(
+                        for: type,
+                        start: start,
+                        end: end,
+                        strategy: strategy
+                    )
+                } else {
+                    result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                }
             }
         }
         return result
@@ -113,6 +175,7 @@ final class HealthKitManager {
             updatedAnchors[type] = try encodeAnchor(newAnchor)
             let converted = try convert(samples: samples, as: type)
             fetchResult.quantitySamples += converted.quantitySamples
+            fetchResult.categorySamples += converted.categorySamples
             fetchResult.sleepSamples += converted.sleepSamples
             fetchResult.workoutSamples += converted.workoutSamples
         }
@@ -168,6 +231,62 @@ final class HealthKitManager {
         }
     }
 
+    private func aggregatedQuantitySamples(
+        for type: HealthDataType,
+        start: Date,
+        end: Date,
+        strategy: BackfillQuantityAggregationStrategy
+    ) async throws -> [HealthQuantitySampleDTO] {
+        guard
+            let quantityType = HealthKitTypeRegistry.sampleType(for: type) as? HKQuantityType,
+            let unit = HealthKitTypeRegistry.preferredQuantityUnit(for: type)
+        else {
+            throw HealthKitManagerError.unsupportedType(type)
+        }
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: start)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate, .strictEndDate])
+        let collection = try await statisticsCollection(
+            for: type,
+            quantityType: quantityType,
+            predicate: predicate,
+            options: strategy.statisticsOptions,
+            anchorDate: dayStart,
+            intervalComponents: DateComponents(day: 1)
+        )
+
+        var samples: [HealthQuantitySampleDTO] = []
+        collection.enumerateStatistics(from: start, to: end) { statistics, _ in
+            guard let value = strategy.value(from: statistics, unit: unit.hkUnit) else { return }
+            let aggregateStart = max(statistics.startDate, start)
+            let aggregateEnd = min(statistics.endDate, end)
+            let dayKey = Self.localDayKey(for: statistics.startDate, calendar: calendar)
+            let metadata = [
+                "aggregation": strategy.rawValue,
+                "aggregation_period": "day",
+                "aggregation_start": Self.isoString(from: aggregateStart),
+                "aggregation_end": Self.isoString(from: aggregateEnd)
+            ]
+
+            samples.append(
+                HealthQuantitySampleDTO(
+                    uuid: UUID(),
+                    type: type,
+                    value: value,
+                    unit: unit.sampleUnit,
+                    startAt: aggregateStart,
+                    endAt: aggregateEnd,
+                    sourceName: "Apple Health",
+                    sourceBundleIdentifier: nil,
+                    metadata: metadata,
+                    stableIDOverride: "healthkit:aggregate:\(type.rawValue):\(dayKey)"
+                )
+            )
+        }
+        return samples
+    }
+
     private func sleepSamples(start: Date, end: Date) async throws -> [HealthSleepSampleDTO] {
         guard let categoryType = HealthKitTypeRegistry.sampleType(for: .sleepAnalysis) as? HKCategoryType else {
             throw HealthKitManagerError.unsupportedType(.sleepAnalysis)
@@ -183,6 +302,28 @@ final class HealthKitManager {
                 sourceName: categorySample.sourceRevision.source.name,
                 sourceBundleIdentifier: categorySample.sourceRevision.source.bundleIdentifier,
                 stage: sleepStageName(categorySample.value),
+                metadata: metadata(from: categorySample)
+            )
+        }
+    }
+
+    private func categorySamples(for type: HealthDataType, start: Date, end: Date) async throws -> [HealthCategorySampleDTO] {
+        guard let categoryType = HealthKitTypeRegistry.sampleType(for: type) as? HKCategoryType else {
+            throw HealthKitManagerError.unsupportedType(type)
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate, .strictEndDate])
+        let samples = try await samples(sampleType: categoryType, predicate: predicate)
+        return samples.compactMap { sample in
+            guard let categorySample = sample as? HKCategorySample else { return nil }
+            return HealthCategorySampleDTO(
+                uuid: categorySample.uuid,
+                type: type,
+                value: categorySample.value,
+                valueLabel: categoryValueLabel(for: type, value: categorySample.value),
+                startAt: categorySample.startDate,
+                endAt: categorySample.endDate,
+                sourceName: categorySample.sourceRevision.source.name,
+                sourceBundleIdentifier: categorySample.sourceRevision.source.bundleIdentifier,
                 metadata: metadata(from: categorySample)
             )
         }
@@ -247,6 +388,35 @@ final class HealthKitManager {
         }
     }
 
+    private func statisticsCollection(
+        for type: HealthDataType,
+        quantityType: HKQuantityType,
+        predicate: NSPredicate?,
+        options: HKStatisticsOptions,
+        anchorDate: Date,
+        intervalComponents: DateComponents
+    ) async throws -> HKStatisticsCollection {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: quantityType,
+                quantitySamplePredicate: predicate,
+                options: options,
+                anchorDate: anchorDate,
+                intervalComponents: intervalComponents
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error {
+                    continuation.resume(throwing: HealthKitManagerError.map(error))
+                } else if let collection {
+                    continuation.resume(returning: collection)
+                } else {
+                    continuation.resume(throwing: HealthKitManagerError.statisticsUnavailable(type))
+                }
+            }
+            healthStore.execute(query)
+        }
+    }
+
     private func convert(samples: [HKSample], as type: HealthDataType) throws -> HealthKitFetchResult {
         switch type {
         case .sleepAnalysis:
@@ -262,7 +432,7 @@ final class HealthKitManager {
                     metadata: metadata(from: categorySample)
                 )
             }
-            return HealthKitFetchResult(quantitySamples: [], sleepSamples: sleep, workoutSamples: [])
+            return HealthKitFetchResult(quantitySamples: [], categorySamples: [], sleepSamples: sleep, workoutSamples: [])
         case .workouts:
             let workouts = samples.compactMap { sample -> HealthWorkoutSampleDTO? in
                 guard let workout = sample as? HKWorkout else { return nil }
@@ -281,8 +451,26 @@ final class HealthKitManager {
                     metadata: metadata(from: workout)
                 )
             }
-            return HealthKitFetchResult(quantitySamples: [], sleepSamples: [], workoutSamples: workouts)
+            return HealthKitFetchResult(quantitySamples: [], categorySamples: [], sleepSamples: [], workoutSamples: workouts)
         default:
+            if type.kind == .category {
+                let categories = samples.compactMap { sample -> HealthCategorySampleDTO? in
+                    guard let categorySample = sample as? HKCategorySample else { return nil }
+                    return HealthCategorySampleDTO(
+                        uuid: categorySample.uuid,
+                        type: type,
+                        value: categorySample.value,
+                        valueLabel: categoryValueLabel(for: type, value: categorySample.value),
+                        startAt: categorySample.startDate,
+                        endAt: categorySample.endDate,
+                        sourceName: categorySample.sourceRevision.source.name,
+                        sourceBundleIdentifier: categorySample.sourceRevision.source.bundleIdentifier,
+                        metadata: metadata(from: categorySample)
+                    )
+                }
+                return HealthKitFetchResult(quantitySamples: [], categorySamples: categories, sleepSamples: [], workoutSamples: [])
+            }
+
             guard let unit = HealthKitTypeRegistry.preferredQuantityUnit(for: type) else {
                 throw HealthKitManagerError.unsupportedType(type)
             }
@@ -300,7 +488,7 @@ final class HealthKitManager {
                     metadata: metadata(from: quantitySample)
                 )
             }
-            return HealthKitFetchResult(quantitySamples: quantities, sleepSamples: [], workoutSamples: [])
+            return HealthKitFetchResult(quantitySamples: quantities, categorySamples: [], sleepSamples: [], workoutSamples: [])
         }
     }
 
@@ -318,6 +506,53 @@ final class HealthKitManager {
         sample.metadata?.reduce(into: [:]) { result, item in
             result[item.key] = String(describing: item.value)
         } ?? [:]
+    }
+
+    private func backfillAggregationStrategy(for type: HealthDataType) -> BackfillQuantityAggregationStrategy? {
+        guard type.kind == .quantity else { return nil }
+        switch type {
+        case .activeEnergy, .appleExerciseTime, .appleMoveTime, .appleStandTime, .basalEnergy,
+             .distanceCrossCountrySkiing, .distanceCycling, .distanceDownhillSnowSports, .distancePaddleSports,
+             .distanceRowing, .distanceSkatingSports, .distanceSwimming, .distanceWalkingRunning,
+             .distanceWheelchair, .flightsClimbed, .nikeFuel, .pushCount, .stepCount, .swimmingStrokeCount,
+             .dietaryBiotin, .dietaryCaffeine, .dietaryCalcium, .dietaryCarbohydrates, .dietaryChloride,
+             .dietaryCholesterol, .dietaryChromium, .dietaryCopper, .dietaryEnergy, .dietaryFatMonounsaturated,
+             .dietaryFatPolyunsaturated, .dietaryFatSaturated, .dietaryFat, .dietaryFiber, .dietaryFolate,
+             .dietaryIodine, .dietaryIron, .dietaryMagnesium, .dietaryManganese, .dietaryMolybdenum,
+             .dietaryNiacin, .dietaryPantothenicAcid, .dietaryPhosphorus, .dietaryPotassium, .dietaryProtein,
+             .dietaryRiboflavin, .dietarySelenium, .dietarySodium, .dietarySugar, .dietaryThiamin,
+             .dietaryVitaminA, .dietaryVitaminB12, .dietaryVitaminB6, .dietaryVitaminC, .dietaryVitaminD,
+             .dietaryVitaminE, .dietaryVitaminK, .water, .dietaryZinc, .insulinDelivery,
+             .numberOfAlcoholicBeverages, .numberOfTimesFallen, .timeInDaylight, .inhalerUsage:
+            return .dailySum
+        default:
+            return .dailyAverage
+        }
+    }
+
+    private func categoryValueLabel(for type: HealthDataType, value: Int) -> String {
+        switch type {
+        case .sleepAnalysis:
+            sleepStageName(value)
+        case .mindfulSession, .handwashingEvent, .toothbrushingEvent, .highHeartRateEvent,
+             .irregularHeartRhythmEvent, .lowHeartRateEvent, .intermenstrualBleeding, .lactation,
+             .pregnancy, .sexualActivity, .sleepApneaEvent:
+            value == 0 ? "not_applicable" : String(value)
+        default:
+            String(value)
+        }
+    }
+
+    private static func localDayKey(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let day = components.day ?? 0
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
+    private static func isoString(from date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 
     private func sleepStageName(_ value: Int) -> String {

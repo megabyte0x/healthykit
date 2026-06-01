@@ -55,6 +55,23 @@ final actor SucceedingUploader: SyncUploading {
     }
 }
 
+final actor FailingForDateRangeStartUploader: SyncUploading {
+    let failingStart: Date
+    private(set) var uploadedIDs: [UUID] = []
+
+    init(failingStart: Date) {
+        self.failingStart = failingStart
+    }
+
+    func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult {
+        uploadedIDs.append(batch.id)
+        if batch.payload.dateRange.start == failingStart {
+            throw APIClientError.transientFailure("old batch failed")
+        }
+        return UploadResult(ok: true, received: batch.payload.metrics.count + batch.payload.workouts.count, duplicates: 0)
+    }
+}
+
 final actor PausingUploader: SyncUploading {
     private(set) var uploadCount = 0
     private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
@@ -150,6 +167,39 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertNotNil(lastSuccessfulSyncAt)
     }
 
+    func testUploadingSpecificBackfillBatchDoesNotRetryOlderPendingFailures() async throws {
+        let store = SyncEngineTestsStore()
+        let staleStart = Date(timeIntervalSince1970: 0)
+        let currentStart = Date(timeIntervalSince1970: 60)
+        let uploader = FailingForDateRangeStartUploader(failingStart: staleStart)
+        let engine = SyncEngine(store: store, uploader: uploader)
+        let stalePayload = SyncPayload.empty(
+            deviceID: "device-123",
+            dateRange: SyncDateRange(start: staleStart, end: currentStart),
+            timezone: "Asia/Kolkata"
+        )
+        let currentPayload = SyncPayload.empty(
+            deviceID: "device-123",
+            dateRange: SyncDateRange(start: currentStart, end: Date(timeIntervalSince1970: 120)),
+            timezone: "Asia/Kolkata"
+        )
+        let staleBatch = try await engine.queue(payload: stalePayload)
+        let currentBatch = try await engine.queue(payload: currentPayload)
+
+        let result = await engine.uploadQueuedBatch(
+            currentBatch,
+            configuration: UploadConfiguration(baseURL: "https://example.com", token: "secret-token", deviceID: "device-123", appVersion: "1.0")
+        )
+
+        let uploadedIDs = await uploader.uploadedIDs
+        let pending = try await store.pendingBatches()
+
+        XCTAssertEqual(result.uploadedCount, 1)
+        XCTAssertEqual(result.failedCount, 0)
+        XCTAssertEqual(uploadedIDs, [currentBatch.id])
+        XCTAssertEqual(pending.map(\.id), [staleBatch.id])
+    }
+
     func testSuccessfulUploadLogIncludesWorkspaceWhenBackendReturnsIt() async throws {
         let store = SyncEngineTestsStore()
         let engine = SyncEngine(store: store, uploader: WorkspaceIdentifyingUploader())
@@ -202,6 +252,80 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(uploadCountWhileFirstRunIsActive, 1)
         XCTAssertEqual(firstResult.uploadedCount, 1)
         XCTAssertEqual(secondResult.uploadedCount, 0)
+    }
+}
+
+final class BackfillSyncTests: XCTestCase {
+    func testLargeBackfillPayloadSplitsIntoServerSizedUploads() {
+        let start = Date(timeIntervalSince1970: 0)
+        let end = Date(timeIntervalSince1970: 60)
+        let metrics = (0..<205).map { index in
+            HealthMetric(
+                id: "healthkit:metric-\(index)",
+                type: "step_count",
+                value: Double(index),
+                unit: "count",
+                startAt: start,
+                endAt: end,
+                sourceName: "Codex",
+                sourceBundleID: nil,
+                metadata: [:]
+            )
+        }
+        let payload = SyncPayload(
+            deviceID: "device-123",
+            exportID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            generatedAt: start,
+            timezone: "Asia/Kolkata",
+            source: "ios-healthkit",
+            schemaVersion: 1,
+            dateRange: SyncDateRange(start: start, end: end),
+            metrics: metrics,
+            workouts: []
+        )
+
+        let chunks = BackfillSync.uploadPayloads(for: payload)
+
+        XCTAssertEqual(chunks.map(\.metrics.count), [100, 100, 5])
+        XCTAssertTrue(chunks.allSatisfy(\.workouts.isEmpty))
+        XCTAssertEqual(Set(chunks.map(\.exportID)).count, 3)
+        XCTAssertTrue(chunks.allSatisfy { $0.dateRange == payload.dateRange })
+    }
+
+    func testEmptyBackfillPayloadDoesNotNeedUpload() {
+        let payload = SyncPayload.empty(
+            deviceID: "device-123",
+            dateRange: SyncDateRange(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 60)),
+            timezone: "Asia/Kolkata"
+        )
+
+        XCTAssertFalse(BackfillSync.shouldUpload(payload))
+    }
+
+    func testBackfillUploadFailureThrowsInsteadOfAllowingSuccess() {
+        let result = SyncRunResult(
+            uploadedCount: 0,
+            failedCount: 1,
+            messages: ["Cannot connect to the backend."]
+        )
+
+        XCTAssertThrowsError(try BackfillSync.validateUpload(result)) { error in
+            XCTAssertEqual(error.localizedDescription, "Cannot connect to the backend.")
+        }
+    }
+
+    func testBackfillUsesMonthSizedChunksForOptimizedHistoricalUploads() {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 3, day: 17))!
+
+        let chunks = BackfillSync.chunks(start: start, end: end)
+
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks[0].start, start)
+        XCTAssertEqual(chunks[0].end, calendar.date(from: DateComponents(year: 2026, month: 1, day: 31))!)
+        XCTAssertEqual(chunks[1].end, calendar.date(from: DateComponents(year: 2026, month: 3, day: 2))!)
+        XCTAssertEqual(chunks[2].end, end)
     }
 }
 

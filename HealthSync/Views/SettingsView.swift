@@ -54,6 +54,18 @@ struct HostedStorageSetupPresentation: Equatable {
         isBusy || hasUsableHostedStorage
     }
 
+    var showsResetButton: Bool {
+        hasAgentAccess || hasStoredUploadToken
+    }
+
+    var resetButtonTitle: String {
+        hasUsableHostedStorage ? "Reset Hosted Storage" : "Create Hosted Storage Again"
+    }
+
+    var isResetButtonDisabled: Bool {
+        isBusy
+    }
+
     var progressMessage: String? {
         isBusy ? "Creating hosted storage..." : nil
     }
@@ -101,9 +113,38 @@ struct HostedStorageSetupPresentation: Equatable {
     }
 }
 
+struct HealthPermissionSettingsPresentation: Equatable {
+    let permissionSummary: String
+    let isBusy: Bool
+
+    var approvalButtonTitle: String {
+        permissionSummary == "Requested"
+            ? "Ask Apple Health for Approval Again"
+            : "Ask Apple Health for Approval"
+    }
+
+    var approvalButtonSystemImage: String {
+        isBusy ? "hourglass" : "heart.text.square.fill"
+    }
+
+    var isApprovalButtonDisabled: Bool {
+        isBusy || permissionSummary == "Unavailable"
+    }
+
+    var showsSettingsButton: Bool {
+        permissionSummary == "Requested"
+    }
+
+    var settingsButtonTitle: String {
+        "Open App Settings"
+    }
+}
+
 struct SettingsView: View {
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var appState: AppState
     @State private var isSupportPromptPresented = false
+    @State private var isResetHostedStorageConfirmationPresented = false
 
     var body: some View {
         NavigationStack {
@@ -166,6 +207,16 @@ struct SettingsView: View {
                         }
                         .disabled(appState.isBusy || !appState.hasStoredToken)
                         .accessibilityIdentifier("test-hosted-connection-button")
+
+                        if presentation.showsResetButton {
+                            Button(role: .destructive) {
+                                isResetHostedStorageConfirmationPresented = true
+                            } label: {
+                                Label(presentation.resetButtonTitle, systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(presentation.isResetButtonDisabled)
+                            .accessibilityIdentifier("reset-hosted-storage-button")
+                        }
                     }
                 } header: {
                     Text("Storage Destination")
@@ -206,6 +257,30 @@ struct SettingsView: View {
                     } header: {
                         Text("Backend Configuration")
                     }
+                }
+
+                Section {
+                    let presentation = healthPermissionPresentation
+
+                    Button {
+                        Task { await appState.connectAppleHealth() }
+                    } label: {
+                        Label(presentation.approvalButtonTitle, systemImage: presentation.approvalButtonSystemImage)
+                    }
+                    .disabled(presentation.isApprovalButtonDisabled)
+                    .accessibilityIdentifier("request-apple-health-approval-button")
+
+                    if presentation.showsSettingsButton {
+                        Button {
+                            openAppSettings()
+                        } label: {
+                            Label(presentation.settingsButtonTitle, systemImage: "gearshape")
+                        }
+                        .disabled(appState.isBusy)
+                        .accessibilityIdentifier("open-app-settings-health-permissions-button")
+                    }
+                } header: {
+                    Text("Apple Health Access")
                 }
 
                 if appState.settings.storageMode == .hostedHealthSync && hasAgentAccess {
@@ -351,6 +426,18 @@ struct SettingsView: View {
             .sheet(isPresented: $isSupportPromptPresented) {
                 SupportDevelopmentSheet(prompt: .current)
             }
+            .confirmationDialog(
+                "Reset hosted storage?",
+                isPresented: $isResetHostedStorageConfirmationPresented,
+                titleVisibility: .visible
+            ) {
+                Button("Reset Hosted Storage", role: .destructive) {
+                    Task { await appState.resetHostedStorage() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This deletes the current hosted workspace data when the saved token is still valid, then creates a new hosted workspace and fresh agent token.")
+            }
         }
     }
 
@@ -375,12 +462,24 @@ struct SettingsView: View {
         )
     }
 
+    private var healthPermissionPresentation: HealthPermissionSettingsPresentation {
+        HealthPermissionSettingsPresentation(
+            permissionSummary: appState.permissionSummary,
+            isBusy: appState.isBusy
+        )
+    }
+
     private var hasAgentAccess: Bool {
         !hostedAgentEndpoint.isEmpty || !appState.hostedAgentToken.isEmpty
     }
 
     private func copyToPasteboard(_ value: String) {
         UIPasteboard.general.string = value
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
     
     // Mapping icon systems to health data types
@@ -401,6 +500,19 @@ struct SettingsView: View {
         case .water: "drop.bubble.fill"
         case .sleepAnalysis: "moon.fill"
         case .workouts: "figure.run"
+        default:
+            switch type.kind {
+            case .quantity:
+                if type.rawValue.hasPrefix("dietary_") {
+                    "fork.knife"
+                } else {
+                    "waveform.path.ecg.rectangle"
+                }
+            case .category:
+                "tag.fill"
+            case .workout:
+                "figure.run"
+            }
         }
     }
     
@@ -422,6 +534,19 @@ struct SettingsView: View {
         case .water: .blue
         case .sleepAnalysis: .indigo
         case .workouts: .green
+        default:
+            switch type.kind {
+            case .quantity:
+                if type.rawValue.hasPrefix("dietary_") {
+                    .green
+                } else {
+                    HealthSyncTheme.primaryBlue
+                }
+            case .category:
+                .purple
+            case .workout:
+                .green
+            }
         }
     }
 }

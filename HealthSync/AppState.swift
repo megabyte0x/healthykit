@@ -7,6 +7,49 @@ enum BusyOperation {
     }
 }
 
+enum BackfillSyncError: LocalizedError, Equatable {
+    case uploadFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .uploadFailed(message):
+            message
+        }
+    }
+}
+
+enum BackfillSync {
+    private static let chunkLength: TimeInterval = 30 * 24 * 60 * 60
+    private static let maxRecordsPerUpload = 100
+
+    static func chunks(start: Date, end: Date) -> [SyncDateRange] {
+        guard end > start else { return [] }
+
+        var ranges: [SyncDateRange] = []
+        var cursor = start
+        while cursor < end {
+            let next = min(cursor.addingTimeInterval(chunkLength), end)
+            ranges.append(SyncDateRange(start: cursor, end: next))
+            cursor = next
+        }
+        return ranges
+    }
+
+    static func validateUpload(_ result: SyncRunResult) throws {
+        guard result.failedCount == 0 else {
+            throw BackfillSyncError.uploadFailed(result.messages.last ?? "Backfill upload failed.")
+        }
+    }
+
+    static func shouldUpload(_ payload: SyncPayload) -> Bool {
+        !payload.isEmpty
+    }
+
+    static func uploadPayloads(for payload: SyncPayload) -> [SyncPayload] {
+        payload.chunked(maxRecords: maxRecordsPerUpload)
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var shouldShowOnboarding = true
@@ -19,6 +62,7 @@ final class AppState: ObservableObject {
     @Published var hasStoredToken = false
     @Published var isBusy = false
     @Published var backfillProgress = 0.0
+    @Published var backfillError: String?
     @Published var lastError: String?
 
     private var store: SQLiteLocalStore?
@@ -110,15 +154,40 @@ final class AppState: ObservableObject {
                 baseURL: AppSettings.hostedBackendURL,
                 label: "Personal Health"
             )
-            settings.storageMode = .hostedHealthSync
-            settings.backendURL = response.backendURL
-            settings.hostedWorkspaceID = response.workspaceID
-            settings.hostedAgentEndpoint = response.agentEndpoint
-            try keychain.saveHostedIngestToken(response.ingestToken)
-            try keychain.saveHostedAgentToken(response.agentToken)
-            hostedAgentToken = response.agentToken
-            hasStoredToken = true
-            try await saveSettingsOnly()
+            try await applyHostedWorkspace(response)
+            restartPeriodicSync()
+        }
+    }
+
+    func resetHostedStorage() async {
+        await runBusy {
+            let client = APIClient(maxAttempts: 1)
+            let label = "Personal Health"
+            let ingestToken = (try keychain.readHostedIngestToken() ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let response: HostedWorkspaceProvisioningResponse
+
+            if ingestToken.isEmpty {
+                response = try await client.provisionHostedWorkspace(
+                    baseURL: AppSettings.hostedBackendURL,
+                    label: label
+                )
+            } else {
+                do {
+                    response = try await client.resetHostedWorkspace(
+                        baseURL: AppSettings.hostedBackendURL,
+                        token: ingestToken,
+                        label: label
+                    )
+                } catch APIClientError.authRejected {
+                    response = try await client.provisionHostedWorkspace(
+                        baseURL: AppSettings.hostedBackendURL,
+                        label: label
+                    )
+                }
+            }
+
+            try await applyHostedWorkspace(response)
             restartPeriodicSync()
         }
     }
@@ -141,6 +210,18 @@ final class AppState: ObservableObject {
             hasStoredToken = true
             try await saveSettingsOnly()
         }
+    }
+
+    private func applyHostedWorkspace(_ response: HostedWorkspaceProvisioningResponse) async throws {
+        settings.storageMode = .hostedHealthSync
+        settings.backendURL = response.backendURL
+        settings.hostedWorkspaceID = response.workspaceID
+        settings.hostedAgentEndpoint = response.agentEndpoint
+        try keychain.saveHostedIngestToken(response.ingestToken)
+        try keychain.saveHostedAgentToken(response.agentToken)
+        hostedAgentToken = response.agentToken
+        hasStoredToken = true
+        try await saveSettingsOnly()
     }
 
     func testConnection() async {
@@ -170,16 +251,26 @@ final class AppState: ObservableObject {
     func backfill(start: Date, end: Date) async {
         guard end > start else { return }
         backfillProgress = 0
+        backfillError = nil
         await runBusy {
-            var cursor = start
-            let total = end.timeIntervalSince(start)
-            while cursor < end {
-                let next = min(cursor.addingTimeInterval(24 * 60 * 60), end)
-                try await syncDateRangeThrowing(start: cursor, end: next)
-                cursor = next
-                backfillProgress = min(1, cursor.timeIntervalSince(start) / total)
+            let chunks = BackfillSync.chunks(start: start, end: end)
+            let total = Double(chunks.count)
+            for (index, chunk) in chunks.enumerated() {
+                do {
+                    try await syncDateRangeThrowing(
+                        start: chunk.start,
+                        end: chunk.end,
+                        refreshAfterUpload: false,
+                        optimizedBackfill: true
+                    )
+                } catch {
+                    backfillError = userMessage(from: error)
+                    throw error
+                }
+                backfillProgress = min(1, Double(index + 1) / total)
             }
             backfillProgress = 1
+            await refresh()
         }
     }
 
@@ -207,13 +298,14 @@ final class AppState: ObservableObject {
                 timezone: TimeZone.current.identifier,
                 quantitySamples: result.fetchResult.quantitySamples,
                 sleepSamples: result.fetchResult.sleepSamples,
+                categorySamples: result.fetchResult.categorySamples,
                 workoutSamples: result.fetchResult.workoutSamples
             )
-            try await syncEngine.queue(payload: payload)
+            let batch = try await syncEngine.queue(payload: payload)
             for (type, anchor) in result.anchors {
                 try await store.saveAnchor(anchor, for: type)
             }
-            _ = await syncEngine.uploadPending(configuration: try await uploadConfiguration())
+            _ = await syncEngine.uploadQueuedBatch(batch, configuration: try await uploadConfiguration())
             await refresh()
         }
     }
@@ -224,24 +316,42 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func syncDateRangeThrowing(start: Date, end: Date) async throws {
+    private func syncDateRangeThrowing(
+        start: Date,
+        end: Date,
+        refreshAfterUpload: Bool = true,
+        optimizedBackfill: Bool = false
+    ) async throws {
         guard let store, let syncEngine else { throw APIClientError.invalidResponse }
         try await ensureHealthPermissionsRequested()
-        let fetchResult = try await healthKit.fetchSamples(types: settings.selectedTypes, start: start, end: end)
+        let fetchResult = try await (optimizedBackfill
+            ? healthKit.fetchBackfillSamples(types: settings.selectedTypes, start: start, end: end)
+            : healthKit.fetchSamples(types: settings.selectedTypes, start: start, end: end))
         let payload = try normalizer.payload(
             deviceID: try await store.deviceID(),
             dateRange: SyncDateRange(start: start, end: end),
             timezone: TimeZone.current.identifier,
             quantitySamples: fetchResult.quantitySamples,
             sleepSamples: fetchResult.sleepSamples,
+            categorySamples: fetchResult.categorySamples,
             workoutSamples: fetchResult.workoutSamples
         )
-        try await syncEngine.queue(payload: payload)
-        let result = await syncEngine.uploadPending(configuration: try await uploadConfiguration())
-        if result.failedCount > 0 {
-            lastError = result.messages.last
+        guard BackfillSync.shouldUpload(payload) else {
+            try await store.appendLog(SyncLogEntry(level: .info, message: "No HealthKit samples found for this date range."))
+            if refreshAfterUpload {
+                await refresh()
+            }
+            return
         }
-        await refresh()
+        let configuration = try await uploadConfiguration()
+        for uploadPayload in BackfillSync.uploadPayloads(for: payload) {
+            let batch = try await syncEngine.queue(payload: uploadPayload)
+            let result = await syncEngine.uploadQueuedBatch(batch, configuration: configuration)
+            try BackfillSync.validateUpload(result)
+        }
+        if refreshAfterUpload {
+            await refresh()
+        }
     }
 
     private func saveSettingsOnly() async throws {

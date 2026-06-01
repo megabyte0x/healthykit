@@ -179,6 +179,25 @@ final class APIClient: SyncUploading {
         return request
     }
 
+    static func makeHostedWorkspaceResetRequest(baseURL: String, token: String, label: String?) throws -> URLRequest {
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedToken.isEmpty else { throw APIClientError.missingToken }
+        let rootURL = try validatedRootURL(from: baseURL)
+        let endpoint = rootURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("hosted")
+            .appendingPathComponent("workspaces")
+            .appendingPathComponent("reset")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(trimmedToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(HostedWorkspaceProvisioningRequest(label: label))
+        return request
+    }
+
     func upload(batch: SyncBatch, configuration: UploadConfiguration) async throws -> UploadResult {
         let request = try Self.makeSyncRequest(
             baseURL: configuration.baseURL,
@@ -272,6 +291,27 @@ final class APIClient: SyncUploading {
         case .accepted:
             do {
                 return try JSONDecoder().decode(HostedAgentTokenRefreshResponse.self, from: data)
+            } catch {
+                throw APIClientError.invalidResponse
+            }
+        case .authError:
+            throw APIClientError.authRejected
+        case .transient, .permanent:
+            throw APIClientError.serverRejected(httpResponse.statusCode)
+        }
+    }
+
+    func resetHostedWorkspace(baseURL: String, token: String, label: String?) async throws -> HostedWorkspaceProvisioningResponse {
+        let request = try Self.makeHostedWorkspaceResetRequest(baseURL: baseURL, token: token, label: label)
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        switch Self.classify(statusCode: httpResponse.statusCode) {
+        case .accepted:
+            do {
+                return try JSONDecoder().decode(HostedWorkspaceProvisioningResponse.self, from: data)
             } catch {
                 throw APIClientError.invalidResponse
             }

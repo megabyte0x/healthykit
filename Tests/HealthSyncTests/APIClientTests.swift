@@ -65,6 +65,20 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ingest-token")
     }
 
+    func testClientBuildsHostedWorkspaceResetRequest() throws {
+        let request = try APIClient.makeHostedWorkspaceResetRequest(
+            baseURL: "https://api.example.com",
+            token: "ingest-token",
+            label: "Personal Health"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/api/hosted/workspaces/reset")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ingest-token")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(String(data: request.httpBody ?? Data(), encoding: .utf8), #"{"label":"Personal Health"}"#)
+    }
+
     func testHostedAgentTokenRefreshResponseDecodesWorkspaceIdentity() throws {
         let data = Data(#"{"workspace_id":"wk_test","agent_endpoint":"https://api.example.com/api/agent/health-data","agent_token":"hs_agent_test"}"#.utf8)
 
@@ -97,6 +111,58 @@ final class APIClientTests: XCTestCase {
 }
 
 final class AppSettingsHostedEndpointTests: XCTestCase {
+    func testDefaultSettingsSelectEverySupportedHealthDataType() {
+        XCTAssertEqual(AppSettings.default.selectedTypes, Set(HealthDataType.allCases))
+    }
+
+    func testDecodingLegacyDefaultSelectedTypesEnablesAllDietaryTypes() throws {
+        let legacyDefaultSelectedTypes: Set<HealthDataType> = [
+            .stepCount,
+            .heartRate,
+            .restingHeartRate,
+            .hrvSDNN,
+            .activeEnergy,
+            .basalEnergy,
+            .bodyMass,
+            .bodyFatPercentage,
+            .sleepAnalysis,
+            .workouts
+        ]
+        let settings = AppSettings(
+            backendURL: "",
+            selectedTypes: legacyDefaultSelectedTypes,
+            syncFrequency: .manualOnly,
+            hasRequestedHealthPermissions: false,
+            storageMode: .customBackend,
+            hostedWorkspaceID: nil,
+            hostedAgentEndpoint: nil
+        )
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertFalse(legacyDefaultSelectedTypes.isSuperset(of: HealthDataType.dietaryTypes))
+        XCTAssertTrue(decoded.selectedTypes.isSuperset(of: HealthDataType.dietaryTypes))
+    }
+
+    func testDecodingCustomSelectedTypesPreservesUserChoice() throws {
+        let customSelectedTypes: Set<HealthDataType> = [.stepCount, .sleepAnalysis]
+        let settings = AppSettings(
+            backendURL: "",
+            selectedTypes: customSelectedTypes,
+            syncFrequency: .manualOnly,
+            hasRequestedHealthPermissions: false,
+            storageMode: .customBackend,
+            hostedWorkspaceID: nil,
+            hostedAgentEndpoint: nil
+        )
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertEqual(decoded.selectedTypes, customSelectedTypes)
+    }
+
     func testHostedStorageUsesManagedEndpointWhenEditableBackendURLIsEmpty() {
         var settings = AppSettings.default
         settings.storageMode = .hostedHealthSync
@@ -116,6 +182,23 @@ final class AppSettingsHostedEndpointTests: XCTestCase {
     func testOnlyCustomStorageShowsManualBackendSettings() {
         XCTAssertTrue(StorageMode.customBackend.showsManualBackendSettings)
         XCTAssertFalse(StorageMode.hostedHealthSync.showsManualBackendSettings)
+    }
+}
+
+final class HealthKitTypeRegistryTests: XCTestCase {
+    func testRegistryIncludesRepresentativeHealthKitQuantityCategoryAndWorkoutTypes() {
+        XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .bloodGlucose))
+        XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .vo2Max))
+        XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .mindfulSession))
+        XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .abdominalCramps))
+        XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .workouts))
+    }
+
+    func testPreferredUnitsCoverRepresentativeAdditionalQuantityTypes() throws {
+        XCTAssertEqual(try XCTUnwrap(HealthKitTypeRegistry.preferredQuantityUnit(for: .bloodGlucose)).sampleUnit, .milligramPerDeciliter)
+        XCTAssertEqual(try XCTUnwrap(HealthKitTypeRegistry.preferredQuantityUnit(for: .vo2Max)).sampleUnit, .milliliterPerKilogramMinute)
+        XCTAssertEqual(try XCTUnwrap(HealthKitTypeRegistry.preferredQuantityUnit(for: .respiratoryRate)).sampleUnit, .countPerMinute)
+        XCTAssertNil(HealthKitTypeRegistry.preferredQuantityUnit(for: .mindfulSession))
     }
 }
 
@@ -159,6 +242,31 @@ final class HealthPermissionPromptPresentationTests: XCTestCase {
         )
 
         XCTAssertFalse(presentation.shouldShowConnectAction)
+    }
+}
+
+final class HealthPermissionSettingsPresentationTests: XCTestCase {
+    func testNotRequestedStateOffersAppleHealthApproval() {
+        let presentation = HealthPermissionSettingsPresentation(
+            permissionSummary: "Not requested",
+            isBusy: false
+        )
+
+        XCTAssertEqual(presentation.approvalButtonTitle, "Ask Apple Health for Approval")
+        XCTAssertEqual(presentation.approvalButtonSystemImage, "heart.text.square.fill")
+        XCTAssertFalse(presentation.isApprovalButtonDisabled)
+        XCTAssertFalse(presentation.showsSettingsButton)
+    }
+
+    func testAlreadyRequestedStateOffersApprovalRetryAndSettingsRecovery() {
+        let presentation = HealthPermissionSettingsPresentation(
+            permissionSummary: "Requested",
+            isBusy: false
+        )
+
+        XCTAssertEqual(presentation.approvalButtonTitle, "Ask Apple Health for Approval Again")
+        XCTAssertTrue(presentation.showsSettingsButton)
+        XCTAssertEqual(presentation.settingsButtonTitle, "Open App Settings")
     }
 }
 
@@ -256,5 +364,20 @@ final class HostedStorageSetupPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.createButtonTitle, "Refresh Hosted Storage")
         XCTAssertEqual(presentation.createButtonSystemImage, "arrow.clockwise")
         XCTAssertFalse(presentation.isCreateButtonDisabled)
+    }
+
+    func testReadyHostedStorageOffersResetAction() {
+        let presentation = HostedStorageSetupPresentation(
+            isBusy: false,
+            backendURL: "https://api.example.com",
+            lastError: nil,
+            hostedAgentEndpoint: "https://api.example.com/api/agent/health-data",
+            hostedAgentToken: "agent-token",
+            hasStoredUploadToken: true
+        )
+
+        XCTAssertTrue(presentation.showsResetButton)
+        XCTAssertEqual(presentation.resetButtonTitle, "Reset Hosted Storage")
+        XCTAssertFalse(presentation.isResetButtonDisabled)
     }
 }
