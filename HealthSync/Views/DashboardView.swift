@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct HealthPermissionPromptPresentation: Equatable {
@@ -39,19 +40,17 @@ struct DashboardView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         
-                        // Custom App Header
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("OVERVIEW")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.secondary)
-                                    .tracking(1.2)
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text("HealthSync")
-                                    .font(.system(.title, design: .rounded).weight(.black))
+                                    .font(.largeTitle.weight(.bold))
+                                    .foregroundStyle(.primary)
+                                Text("Private Apple Health sync")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
                             
-                            // HealthKit connection pill
                             let isConnected = appState.permissionSummary == "Requested"
                             StatusBadge(
                                 text: isConnected ? "Connected" : "Not Active",
@@ -61,14 +60,13 @@ struct DashboardView: View {
                         }
                         .padding(.horizontal, 4)
                         
-                        // Sleek Error Notice Card (if any error is active)
                         if let error = appState.status.lastError ?? appState.lastError {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.title3)
                                         .foregroundStyle(HealthSyncTheme.warningOrange)
-                                    Text("Sync Connection Issue")
+                                    Text("Needs Attention")
                                         .font(.headline)
                                         .foregroundStyle(.primary)
                                 }
@@ -81,13 +79,12 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .healthCardStyle(padding: 16)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 20)
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .stroke(HealthSyncTheme.warningOrange.opacity(0.3), lineWidth: 1.5)
                             )
                             .transition(.opacity)
                         }
                         
-                        // 2x2 Grid of Status Metrics
                         LazyVGrid(columns: columns, spacing: 16) {
                             MetricCard(
                                 title: "Last Success",
@@ -118,16 +115,15 @@ struct DashboardView: View {
                                 value: appState.settings.storageMode == .hostedHealthSync ? "Hosted" : "Custom",
                                 icon: "server.rack",
                                 iconColor: .purple,
-                                subtitle: appState.settings.storageMode.label
+                                subtitle: appState.settings.storageMode == .hostedHealthSync ? "Managed storage" : "Custom backend"
                             )
                         }
                         
-                        // Control Center & Actions Card
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
-                                Image(systemName: "slider.horizontal.3")
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                                     .foregroundStyle(HealthSyncTheme.primaryBlue)
-                                Text("Control Center")
+                                Text("Sync")
                                     .font(.headline)
                             }
 
@@ -157,7 +153,7 @@ struct DashboardView: View {
                             }
                             .buttonStyle(HealthSyncTheme.PrimaryButtonStyle(
                                 isBusy: appState.isBusy,
-                                gradient: appState.isBusy ? LinearGradient(colors: [.secondary, .secondary], startPoint: .top, endPoint: .bottom) : HealthSyncTheme.stepsGradient
+                                gradient: appState.isBusy ? HealthSyncTheme.disabledGradient : HealthSyncTheme.stepsGradient
                             ))
                             .disabled(appState.isBusy)
                             
@@ -178,10 +174,10 @@ struct DashboardView: View {
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("Backfill historical data")
+                                        Text("Sync historical data")
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(.primary)
-                                        Text("Upload selected custom date ranges")
+                                        Text("Choose a custom date range")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -191,14 +187,14 @@ struct DashboardView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .buttonStyle(.plain)
                         }
                         .healthCardStyle(padding: 16)
                         
-                        // Recent Sync Logs Timeline Card
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
-                                Image(systemName: "doc.text.magnifyingglass")
-                                    .foregroundStyle(.purple)
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundStyle(HealthSyncTheme.primaryBlue)
                                 Text("Recent Activity")
                                     .font(.headline)
                                 Spacer()
@@ -220,8 +216,8 @@ struct DashboardView: View {
                                 HStack {
                                     Spacer()
                                     VStack(spacing: 8) {
-                                        Image(systemName: "doc.plaintext")
-                                            .font(.largeTitle)
+                                        Image(systemName: "clock")
+                                            .font(.title)
                                             .foregroundStyle(.secondary)
                                         Text("No sync logs recorded yet")
                                             .font(.subheadline)
@@ -238,7 +234,6 @@ struct DashboardView: View {
                                         let isLast = index == logsToDisplay.count - 1
                                         
                                         HStack(alignment: .top, spacing: 14) {
-                                            // Timeline dot and line
                                             VStack(spacing: 0) {
                                                 Circle()
                                                     .fill(logColor(for: log.level))
@@ -253,7 +248,6 @@ struct DashboardView: View {
                                                 }
                                             }
                                             
-                                            // Log details
                                             VStack(alignment: .leading, spacing: 3) {
                                                 HStack {
                                                     Text(log.level.rawValue.uppercased())
@@ -265,7 +259,7 @@ struct DashboardView: View {
                                                         .foregroundStyle(.secondary)
                                                 }
                                                 
-                                                Text(log.message)
+                                                Text(HealthSyncUserMessages.displayLogMessage(log.message))
                                                     .font(.subheadline)
                                                     .foregroundStyle(.primary)
                                                     .lineLimit(2)
@@ -277,8 +271,13 @@ struct DashboardView: View {
                             }
                         }
                         .healthCardStyle(padding: 16)
+
+                        Color.clear
+                            .frame(height: 88)
+                            .accessibilityHidden(true)
                     }
                     .padding(16)
+                    .safeAreaPadding(.bottom, 32)
                 }
                 .refreshable {
                     await appState.refresh()
@@ -312,13 +311,18 @@ private struct HealthPermissionActionView: View {
     let onConnect: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "heart.text.square.fill")
                     .foregroundStyle(HealthSyncTheme.primaryRed)
                 Text("Apple Health Access")
                     .font(.subheadline.weight(.semibold))
             }
+
+            Text("Allow HealthSync to read the health categories you select. You can review or revoke access in iPhone Settings at any time.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button(action: onConnect) {
                 HStack(spacing: 8) {
@@ -343,14 +347,13 @@ private struct HealthPermissionActionView: View {
 
     private var buttonGradient: LinearGradient {
         if presentation.isConnectButtonDisabled {
-            LinearGradient(colors: [.secondary, .secondary], startPoint: .top, endPoint: .bottom)
+            HealthSyncTheme.disabledGradient
         } else {
             HealthSyncTheme.heartGradient
         }
     }
 }
 
-// Custom Premium Metric Card Component
 private struct MetricCard: View {
     let title: String
     let value: String
@@ -374,7 +377,7 @@ private struct MetricCard: View {
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -385,7 +388,7 @@ private struct MetricCard: View {
             }
             
             Text(subtitle)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -396,7 +399,18 @@ private struct MetricCard: View {
 
 private extension Optional where Wrapped == Date {
     var displayValue: String {
-        guard let self else { return "Never" }
-        return self.formatted(date: .abbreviated, time: .shortened)
+        DashboardMetricDateFormatter.displayValue(for: self)
+    }
+}
+
+enum DashboardMetricDateFormatter {
+    static func displayValue(for date: Date?, timeZone: TimeZone = .current) -> String {
+        guard let date else { return "Never" }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "d MMM, h:mm a"
+        return formatter.string(from: date)
     }
 }

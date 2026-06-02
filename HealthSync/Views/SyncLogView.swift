@@ -11,29 +11,24 @@ struct SyncLogView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     if appState.logs.isEmpty {
-                        VStack(spacing: 16) {
-                            Spacer()
-                            Image(systemName: "doc.plaintext")
-                                .font(.system(size: 64))
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 100)
-                            Text("No Activity Yet")
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(.primary)
-                            Text("Your synchronization logs and connection check history will appear here once sync actions start.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                            Spacer()
-                        }
+                        ContentUnavailableView(
+                            "No Activity Yet",
+                            systemImage: "clock.arrow.circlepath",
+                            description: Text("Sync logs and connection checks will appear here after HealthSync starts uploading data.")
+                        )
+                        .padding(.top, 96)
                     } else {
                         ForEach(appState.logs) { log in
                             SyncLogRow(log: log)
                         }
                     }
+
+                    Color.clear
+                        .frame(height: 96)
+                        .accessibilityHidden(true)
                 }
                 .padding(16)
+                .safeAreaPadding(.bottom, 32)
             }
             .refreshable {
                 await appState.refresh()
@@ -50,9 +45,8 @@ struct SyncLogRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                // Log Level Badge
-                Text(log.level.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                Label(log.level.rawValue.capitalized, systemImage: iconName)
+                    .font(.caption.weight(.semibold))
                     .padding(.vertical, 4)
                     .padding(.horizontal, 8)
                     .foregroundStyle(color)
@@ -61,18 +55,16 @@ struct SyncLogRow: View {
                 
                 Spacer()
                 
-                // Timestamp
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
                         .font(.caption2)
-                    Text(log.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(DashboardMetricDateFormatter.displayValue(for: log.createdAt))
                         .font(.caption2.weight(.medium))
                 }
                 .foregroundStyle(.secondary)
             }
             
-            // Log Message Content
-            Text(log.message)
+            Text(HealthSyncUserMessages.displayLogMessage(log.message))
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(4)

@@ -16,11 +16,11 @@ struct BackfillView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
                             .foregroundStyle(HealthSyncTheme.primaryBlue)
-                        Text("Legacy Backfill Zone")
+                        Text("Historical Sync")
                             .font(.headline)
                     }
                     
-                    Text("Select a custom date range to fetch historical metrics and workouts from Apple Health, normalize them, and upload them securely to your database.")
+                    Text("Choose a date range to read selected metrics and workouts from Apple Health, then upload them to your configured storage destination.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineSpacing(2)
@@ -73,7 +73,7 @@ struct BackfillView: View {
                             
                             HStack(spacing: 6) {
                                 PulsingDot(color: HealthSyncTheme.primaryBlue)
-                                Text("Uploading chunks securely...")
+                                Text("Uploading selected data...")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -91,7 +91,7 @@ struct BackfillView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Backfill Failed")
+                                Text("Historical Sync Failed")
                                     .font(.subheadline.weight(.bold))
                                 Text(backfillError)
                                     .font(.caption)
@@ -119,9 +119,9 @@ struct BackfillView: View {
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Backfill Successful!")
+                                Text("Historical Sync Complete")
                                     .font(.subheadline.weight(.bold))
-                                Text("All historical data uploaded and synced.")
+                                Text("Selected Apple Health data was uploaded.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -145,13 +145,13 @@ struct BackfillView: View {
                                     .tint(.white)
                             } else {
                                 Image(systemName: "tray.and.arrow.up.fill")
-                                Text("Start Backfill Sync")
+                                Text("Sync Selected Range")
                             }
                         }
                     }
                     .buttonStyle(HealthSyncTheme.PrimaryButtonStyle(
                         isBusy: appState.isBusy,
-                        gradient: isInvalidRange || appState.isBusy ? LinearGradient(colors: [.secondary, .secondary], startPoint: .top, endPoint: .bottom) : HealthSyncTheme.heartGradient
+                        gradient: isInvalidRange || appState.isBusy ? HealthSyncTheme.disabledGradient : HealthSyncTheme.heartGradient
                     ))
                     .disabled(isInvalidRange || appState.isBusy)
                     
@@ -167,7 +167,7 @@ struct BackfillView: View {
             }
             .padding(16)
         }
-        .navigationTitle("Backfill")
+        .navigationTitle("Historical Sync")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

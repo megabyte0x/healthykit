@@ -17,32 +17,51 @@ struct HealthSyncApp: App {
 
 struct ContentRootView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var selectedTab = InitialAppTab.resolve()
 
     var body: some View {
         Group {
             if appState.shouldShowOnboarding {
                 OnboardingView()
             } else {
-                TabView {
+                TabView(selection: $selectedTab) {
                     DashboardView()
                         .tabItem {
                             Label("Dashboard", systemImage: "waveform.path.ecg")
                         }
+                        .tag(AppTab.dashboard)
 
                     SettingsView()
                         .tabItem {
                             Label("Settings", systemImage: "gearshape")
                         }
+                        .tag(AppTab.settings)
                 }
             }
         }
     }
 }
 
-// MARK: - HealthSync Theme & Premium Style Guide
+enum AppTab: Hashable {
+    case dashboard
+    case settings
+}
+
+enum InitialAppTab {
+    static func resolve(arguments: [String] = ProcessInfo.processInfo.arguments) -> AppTab {
+        #if DEBUG
+        if arguments.contains("-HealthSyncOpenSettings") {
+            return .settings
+        }
+        #endif
+
+        return .dashboard
+    }
+}
+
+// MARK: - HealthSync Theme
 
 struct HealthSyncTheme {
-    // Curated color palette
     static let primaryRed = Color(red: 255/255, green: 45/255, blue: 85/255)
     static let primaryPink = Color(red: 255/255, green: 73/255, blue: 129/255)
     static let primaryBlue = Color(red: 0/255, green: 122/255, blue: 255/255)
@@ -68,16 +87,19 @@ struct HealthSyncTheme {
     static var warningGradient: LinearGradient {
         LinearGradient(colors: [warningOrange, warningAmber], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
+
+    static var disabledGradient: LinearGradient {
+        LinearGradient(colors: [Color(uiColor: .systemGray3), Color(uiColor: .systemGray2)], startPoint: .top, endPoint: .bottom)
+    }
     
     static var backgroundGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(uiColor: .systemBackground), Color(uiColor: .secondarySystemBackground)],
+            colors: [Color(uiColor: .systemGroupedBackground), Color(uiColor: .systemBackground)],
             startPoint: .top,
             endPoint: .bottom
         )
     }
     
-    // Glassmorphic / Premium Card Modifier
     struct CardModifier: ViewModifier {
         let padding: CGFloat
         
@@ -85,14 +107,14 @@ struct HealthSyncTheme {
             content
                 .padding(padding)
                 .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 5)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
         }
     }
     
@@ -104,20 +126,19 @@ struct HealthSyncTheme {
             content
                 .padding(padding)
                 .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 5)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
                 .scaleEffect(isPressed ? 0.98 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         }
     }
     
-    // Action Button Styles
     struct PrimaryButtonStyle: ButtonStyle {
         let isBusy: Bool
         let gradient: LinearGradient
@@ -130,9 +151,8 @@ struct HealthSyncTheme {
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(gradient)
-                        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
                 )
                 .opacity(configuration.isPressed || isBusy ? 0.9 : 1.0)
                 .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
@@ -151,7 +171,6 @@ extension View {
     }
 }
 
-// Glowing Pulse Indicator
 struct PulsingDot: View {
     let color: Color
     @State private var animate = false
@@ -160,8 +179,8 @@ struct PulsingDot: View {
         ZStack {
             Circle()
                 .fill(color.opacity(0.3))
-                .frame(width: 14, height: 14)
-                .scaleEffect(animate ? 1.8 : 1.0)
+                .frame(width: 12, height: 12)
+                .scaleEffect(animate ? 1.6 : 1.0)
                 .opacity(animate ? 0.0 : 1.0)
             
             Circle()
@@ -176,7 +195,6 @@ struct PulsingDot: View {
     }
 }
 
-// Premium Status Pill
 struct StatusBadge: View {
     let text: String
     let color: Color
@@ -186,16 +204,16 @@ struct StatusBadge: View {
         HStack(spacing: 6) {
             if let iconName {
                 Image(systemName: iconName)
-                    .font(.caption.weight(.bold))
+                    .font(.caption.weight(.semibold))
+                    .symbolRenderingMode(.hierarchical)
             } else {
                 PulsingDot(color: color)
             }
             
             Text(text)
-                .font(.caption2.weight(.bold))
-                .textCase(.uppercase)
+                .font(.caption.weight(.semibold))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
         .padding(.horizontal, 10)
         .foregroundStyle(color)
         .background(color.opacity(0.12))

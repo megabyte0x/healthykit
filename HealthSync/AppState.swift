@@ -1,6 +1,37 @@
 import Foundation
 import SwiftUI
 
+enum HealthSyncUserMessages {
+    static let noNewSamplesFound = "No new Apple Health samples found."
+    static let noSamplesFoundForDateRange = "No Apple Health samples found for this date range."
+
+    static func displayLogMessage(_ message: String) -> String {
+        message
+            .replacingOccurrences(of: "No new HealthKit samples found.", with: noNewSamplesFound)
+            .replacingOccurrences(of: "No HealthKit samples found for this date range.", with: noSamplesFoundForDateRange)
+    }
+}
+
+enum DevelopmentKeychainBypass {
+    static var isEnabled: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    static func hasStoredToken(readProductionTokenState: () throws -> Bool) throws -> Bool {
+        guard !isEnabled else { return true }
+        return try readProductionTokenState()
+    }
+
+    static func hostedAgentToken(readProductionToken: () throws -> String?) throws -> String {
+        guard !isEnabled else { return "" }
+        return try readProductionToken() ?? ""
+    }
+}
+
 enum BusyOperation {
     static func canStart(isBusy: Bool) -> Bool {
         !isBusy
@@ -78,8 +109,12 @@ final class AppState: ObservableObject {
             store = localStore
             syncEngine = SyncEngine(store: localStore)
             settings = try await localStore.loadSettings()
-            hasStoredToken = try hasTokenForCurrentStorageMode()
-            hostedAgentToken = try keychain.readHostedAgentToken() ?? ""
+            hasStoredToken = try DevelopmentKeychainBypass.hasStoredToken {
+                try hasTokenForCurrentStorageMode()
+            }
+            hostedAgentToken = try DevelopmentKeychainBypass.hostedAgentToken {
+                try keychain.readHostedAgentToken()
+            }
             shouldShowOnboarding = !settings.hasRequestedHealthPermissions
             permissionSummary = healthKit.isHealthDataAvailable
                 ? (settings.hasRequestedHealthPermissions ? "Requested" : "Not requested")
@@ -286,7 +321,7 @@ final class AppState: ObservableObject {
             }
             let result = try await healthKit.fetchIncremental(types: settings.selectedTypes, anchors: anchors)
             guard !result.fetchResult.isEmpty else {
-                try await store.appendLog(SyncLogEntry(level: .info, message: "No new HealthKit samples found."))
+                try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noNewSamplesFound))
                 await refresh()
                 return
             }
@@ -337,7 +372,7 @@ final class AppState: ObservableObject {
             workoutSamples: fetchResult.workoutSamples
         )
         guard BackfillSync.shouldUpload(payload) else {
-            try await store.appendLog(SyncLogEntry(level: .info, message: "No HealthKit samples found for this date range."))
+            try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noSamplesFoundForDateRange))
             if refreshAfterUpload {
                 await refresh()
             }

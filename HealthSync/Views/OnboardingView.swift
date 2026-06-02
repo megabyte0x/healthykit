@@ -9,58 +9,56 @@ struct OnboardingView: View {
                 HealthSyncTheme.backgroundGradient
                     .ignoresSafeArea()
                 
-                VStack(spacing: 32) {
+                VStack(spacing: 28) {
                     Spacer()
                     
                     Image("HealthSyncLogo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 112, height: 112)
-                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.10), radius: 16, x: 0, y: 8)
+                        .frame(width: 96, height: 96)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
                         .padding(.bottom, 8)
                     
-                    // Title and Description
                     VStack(spacing: 12) {
                         Text("HealthSync")
-                            .font(.system(.largeTitle, design: .rounded).weight(.black))
-                            .tracking(-0.5)
-                        
-                        Text("Sync your Apple Health metrics and workouts directly to your private backend database, with absolute security.")
+                            .font(.largeTitle.weight(.bold))
+
+                        Text("Send selected Apple Health metrics and workouts to the storage destination you control.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 16)
                     }
                     
-                    // Premium Feature Cards List
                     VStack(spacing: 16) {
-                        FeatureRow(
-                            icon: "lock.shield.fill",
-                            iconColor: .purple,
-                            title: "Privacy First",
-                            description: "Your health metrics never leave this device except to your own configured private backend URL."
-                        )
-                        
                         FeatureRow(
                             icon: "heart.text.square.fill",
                             iconColor: HealthSyncTheme.primaryRed,
-                            title: "Comprehensive Tracking",
-                            description: "Easily read Steps, Heart Rate, HRV, Energy, Body Composition, Sleep, Workouts, and Macros."
+                            title: "Apple Health access",
+                            description: "Choose the read permissions HealthSync needs. iOS keeps access under your control."
                         )
                         
                         FeatureRow(
-                            icon: "key.fill",
+                            icon: "externaldrive.badge.checkmark",
                             iconColor: HealthSyncTheme.primaryBlue,
-                            title: "Keychain Security",
-                            description: "Your authentication tokens and custom endpoints are securely encrypted within the iOS Keychain."
+                            title: "Private destination",
+                            description: "Use hosted HealthSync storage or point the app at your own backend."
+                        )
+
+                        FeatureRow(
+                            icon: "clock.arrow.circlepath",
+                            iconColor: HealthSyncTheme.successGreen,
+                            title: "Controlled sync",
+                            description: "Upload the last 24 hours, sync a historical range, or let background sync run on your schedule."
                         )
                     }
                     .padding(.horizontal, 4)
                     
                     Spacer()
                     
-                    // Action Area
                     VStack(spacing: 16) {
                         if let error = appState.lastError {
                             HStack(spacing: 10) {
@@ -127,11 +125,11 @@ private struct FeatureRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 
                 Text(description)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

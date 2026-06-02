@@ -115,6 +115,22 @@ final class AppSettingsHostedEndpointTests: XCTestCase {
         XCTAssertEqual(AppSettings.default.selectedTypes, Set(HealthDataType.allCases))
     }
 
+    func testHealthMetricCategoriesCoverEverySupportedTypeExactlyOnce() {
+        let groupedTypes = HealthMetricCategory.allCases.flatMap(\.types)
+
+        XCTAssertEqual(Set(groupedTypes), Set(HealthDataType.allCases))
+        XCTAssertEqual(groupedTypes.count, HealthDataType.allCases.count)
+    }
+
+    func testHealthMetricCategoriesGroupCommonTypesByUserMeaning() {
+        XCTAssertEqual(HealthMetricCategory.category(for: .stepCount), .activity)
+        XCTAssertEqual(HealthMetricCategory.category(for: .heartRate), .heart)
+        XCTAssertEqual(HealthMetricCategory.category(for: .dietaryProtein), .nutrition)
+        XCTAssertEqual(HealthMetricCategory.category(for: .bloodGlucose), .clinical)
+        XCTAssertEqual(HealthMetricCategory.category(for: .sleepAnalysis), .sleepMindfulness)
+        XCTAssertEqual(HealthMetricCategory.category(for: .menstrualFlow), .reproductiveHealth)
+    }
+
     func testDecodingLegacyDefaultSelectedTypesEnablesAllDietaryTypes() throws {
         let legacyDefaultSelectedTypes: Set<HealthDataType> = [
             .stepCount,
@@ -245,6 +261,68 @@ final class HealthPermissionPromptPresentationTests: XCTestCase {
     }
 }
 
+final class DashboardMetricDateFormatterTests: XCTestCase {
+    func testDisplayValueUsesShortReadableDateForCompactMetricCards() throws {
+        let timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Kolkata"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 6, day: 2, hour: 4, minute: 27)))
+
+        XCTAssertEqual(DashboardMetricDateFormatter.displayValue(for: date, timeZone: timeZone), "2 Jun, 4:27 AM")
+        XCTAssertEqual(DashboardMetricDateFormatter.displayValue(for: nil), "Never")
+    }
+}
+
+final class HealthSyncUserMessagesTests: XCTestCase {
+    func testNoSamplesMessagesUseAppleHealthWording() {
+        XCTAssertEqual(HealthSyncUserMessages.noNewSamplesFound, "No new Apple Health samples found.")
+        XCTAssertEqual(HealthSyncUserMessages.noSamplesFoundForDateRange, "No Apple Health samples found for this date range.")
+    }
+
+    func testDisplayLogMessageUpdatesLegacyHealthKitSampleCopy() {
+        XCTAssertEqual(
+            HealthSyncUserMessages.displayLogMessage("No new HealthKit samples found."),
+            "No new Apple Health samples found."
+        )
+        XCTAssertEqual(
+            HealthSyncUserMessages.displayLogMessage("No HealthKit samples found for this date range."),
+            "No Apple Health samples found for this date range."
+        )
+        XCTAssertEqual(
+            HealthSyncUserMessages.displayLogMessage("Missing com.apple.developer.healthkit entitlement."),
+            "Missing com.apple.developer.healthkit entitlement."
+        )
+    }
+}
+
+final class DevelopmentKeychainBypassTests: XCTestCase {
+    func testDebugBuildDoesNotReadKeychainForStoredTokenAvailability() throws {
+        var didReadKeychain = false
+
+        let hasStoredToken = try DevelopmentKeychainBypass.hasStoredToken {
+            didReadKeychain = true
+            throw KeychainError.unexpectedStatus(-34018)
+        }
+
+        XCTAssertTrue(DevelopmentKeychainBypass.isEnabled)
+        XCTAssertTrue(hasStoredToken)
+        XCTAssertFalse(didReadKeychain)
+    }
+
+    func testDebugBuildDoesNotReadHostedAgentToken() throws {
+        var didReadKeychain = false
+
+        let token = try DevelopmentKeychainBypass.hostedAgentToken {
+            didReadKeychain = true
+            throw KeychainError.unexpectedStatus(-34018)
+        }
+
+        XCTAssertTrue(DevelopmentKeychainBypass.isEnabled)
+        XCTAssertEqual(token, "")
+        XCTAssertFalse(didReadKeychain)
+    }
+}
+
 final class HealthPermissionSettingsPresentationTests: XCTestCase {
     func testNotRequestedStateOffersAppleHealthApproval() {
         let presentation = HealthPermissionSettingsPresentation(
@@ -252,7 +330,7 @@ final class HealthPermissionSettingsPresentationTests: XCTestCase {
             isBusy: false
         )
 
-        XCTAssertEqual(presentation.approvalButtonTitle, "Ask Apple Health for Approval")
+        XCTAssertEqual(presentation.approvalButtonTitle, "Review Apple Health Access")
         XCTAssertEqual(presentation.approvalButtonSystemImage, "heart.text.square.fill")
         XCTAssertFalse(presentation.isApprovalButtonDisabled)
         XCTAssertFalse(presentation.showsSettingsButton)
@@ -264,9 +342,51 @@ final class HealthPermissionSettingsPresentationTests: XCTestCase {
             isBusy: false
         )
 
-        XCTAssertEqual(presentation.approvalButtonTitle, "Ask Apple Health for Approval Again")
+        XCTAssertEqual(presentation.approvalButtonTitle, "Review Apple Health Access")
         XCTAssertTrue(presentation.showsSettingsButton)
-        XCTAssertEqual(presentation.settingsButtonTitle, "Open App Settings")
+        XCTAssertEqual(presentation.settingsButtonTitle, "Open iPhone Settings")
+    }
+}
+
+final class SettingsOverviewPresentationTests: XCTestCase {
+    func testCustomBackendSummaryShowsTokenAndSelectionState() {
+        let presentation = SettingsOverviewPresentation(
+            storageMode: .customBackend,
+            permissionSummary: "Requested",
+            selectedHealthDataCount: 8,
+            totalHealthDataCount: 12,
+            hasStoredUploadToken: false
+        )
+
+        XCTAssertEqual(presentation.storageLabel, "Custom backend")
+        XCTAssertEqual(presentation.permissionLabel, "Apple Health ready")
+        XCTAssertEqual(presentation.healthDataSummary, "8 of 12 selected")
+        XCTAssertEqual(presentation.tokenLabel, "Token needed")
+    }
+
+    func testHostedStorageSummaryShowsManagedDestinationAndSavedToken() {
+        let presentation = SettingsOverviewPresentation(
+            storageMode: .hostedHealthSync,
+            permissionSummary: "Unavailable",
+            selectedHealthDataCount: 12,
+            totalHealthDataCount: 12,
+            hasStoredUploadToken: true
+        )
+
+        XCTAssertEqual(presentation.storageLabel, "Hosted storage")
+        XCTAssertEqual(presentation.permissionLabel, "Apple Health unavailable")
+        XCTAssertEqual(presentation.healthDataSummary, "12 of 12 selected")
+        XCTAssertEqual(presentation.tokenLabel, "Token saved")
+    }
+}
+
+final class InitialAppTabTests: XCTestCase {
+    func testDebugLaunchArgumentCanOpenSettingsForUiVerification() {
+        XCTAssertEqual(
+            InitialAppTab.resolve(arguments: ["HealthSync", "-HealthSyncOpenSettings"]),
+            .settings
+        )
+        XCTAssertEqual(InitialAppTab.resolve(arguments: ["HealthSync"]), .dashboard)
     }
 }
 
@@ -275,7 +395,7 @@ final class SupportDevelopmentPromptTests: XCTestCase {
         let prompt = SupportDevelopmentPrompt.current
 
         XCTAssertEqual(prompt.paymentMethodLabel, "ZEC")
-        XCTAssertEqual(prompt.message, "Support the application development by paying some ZEC.")
+        XCTAssertEqual(prompt.message, "Support continued HealthSync development with ZEC.")
         XCTAssertFalse(prompt.message.contains("$"))
         XCTAssertFalse(prompt.message.contains("10"))
         XCTAssertEqual(

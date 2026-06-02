@@ -386,6 +386,133 @@ enum HealthDataType: String, CaseIterable, Codable, Identifiable, Equatable {
     }
 }
 
+enum HealthMetricCategory: String, CaseIterable, Identifiable, Equatable {
+    case bodyMeasurements
+    case activity
+    case heart
+    case mobility
+    case nutrition
+    case hearingEnvironment
+    case clinical
+    case respiratory
+    case sleepMindfulness
+    case reproductiveHealth
+    case symptomsEvents
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .bodyMeasurements:
+            "Body"
+        case .activity:
+            "Activity"
+        case .heart:
+            "Heart"
+        case .mobility:
+            "Mobility"
+        case .nutrition:
+            "Nutrition"
+        case .hearingEnvironment:
+            "Hearing & Environment"
+        case .clinical:
+            "Clinical"
+        case .respiratory:
+            "Respiratory"
+        case .sleepMindfulness:
+            "Sleep & Mindfulness"
+        case .reproductiveHealth:
+            "Reproductive Health"
+        case .symptomsEvents:
+            "Symptoms & Events"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .bodyMeasurements:
+            "Body composition, temperature, and measurements."
+        case .activity:
+            "Movement, energy, distance, and workout metrics."
+        case .heart:
+            "Heart rate, rhythm, cardio, and blood pressure."
+        case .mobility:
+            "Walking steadiness, gait, stairs, and fall-related metrics."
+        case .nutrition:
+            "Dietary intake, hydration, vitamins, and minerals."
+        case .hearingEnvironment:
+            "Audio exposure, daylight, UV, and environmental readings."
+        case .clinical:
+            "Glucose, insulin, alcohol, and related clinical values."
+        case .respiratory:
+            "Breathing, oxygen, lung capacity, and respiratory symptoms."
+        case .sleepMindfulness:
+            "Sleep, mindfulness, and rest-related records."
+        case .reproductiveHealth:
+            "Cycle tracking, pregnancy, and reproductive records."
+        case .symptomsEvents:
+            "Symptoms, hygiene events, and other Apple Health records."
+        }
+    }
+
+    var types: [HealthDataType] {
+        HealthDataType.allCases.filter { Self.category(for: $0) == self }
+    }
+
+    static func category(for type: HealthDataType) -> HealthMetricCategory {
+        if type.rawValue.hasPrefix("dietary_") || type == .water {
+            return .nutrition
+        }
+
+        switch type {
+        case .appleSleepingWristTemperature, .bodyFatPercentage, .bodyMass, .bodyMassIndex,
+             .electrodermalActivity, .height, .leanBodyMass, .waistCircumference,
+             .basalBodyTemperature, .bodyTemperature:
+            return .bodyMeasurements
+        case .activeEnergy, .appleExerciseTime, .appleMoveTime, .appleStandTime, .basalEnergy,
+             .crossCountrySkiingSpeed, .cyclingCadence, .cyclingFunctionalThresholdPower, .cyclingPower,
+             .cyclingSpeed, .distanceCrossCountrySkiing, .distanceCycling, .distanceDownhillSnowSports,
+             .distancePaddleSports, .distanceRowing, .distanceSkatingSports, .distanceSwimming,
+             .distanceWalkingRunning, .distanceWheelchair, .estimatedWorkoutEffortScore, .flightsClimbed,
+             .nikeFuel, .paddleSportsSpeed, .physicalEffort, .pushCount, .rowingSpeed, .runningPower,
+             .runningSpeed, .stepCount, .swimmingStrokeCount, .underwaterDepth, .workoutEffortScore,
+             .workouts:
+            return .activity
+        case .atrialFibrillationBurden, .heartRate, .heartRateRecoveryOneMinute, .restingHeartRate,
+             .hrvSDNN, .peripheralPerfusionIndex, .vo2Max, .walkingHeartRateAverage,
+             .bloodPressureDiastolic, .bloodPressureSystolic, .highHeartRateEvent,
+             .irregularHeartRhythmEvent, .lowCardioFitnessEvent, .lowHeartRateEvent,
+             .rapidPoundingOrFlutteringHeartbeat, .skippedHeartbeat:
+            return .heart
+        case .appleWalkingSteadiness, .runningGroundContactTime, .runningStrideLength,
+             .runningVerticalOscillation, .sixMinuteWalkTestDistance, .stairAscentSpeed,
+             .stairDescentSpeed, .walkingAsymmetryPercentage, .walkingDoubleSupportPercentage,
+             .walkingSpeed, .walkingStepLength, .appleWalkingSteadinessEvent, .numberOfTimesFallen:
+            return .mobility
+        case .environmentalAudioExposure, .environmentalSoundReduction, .headphoneAudioExposure,
+             .environmentalAudioExposureEvent, .headphoneAudioExposureEvent, .timeInDaylight,
+             .uvExposure, .waterTemperature:
+            return .hearingEnvironment
+        case .bloodAlcoholContent, .bloodGlucose, .insulinDelivery, .numberOfAlcoholicBeverages:
+            return .clinical
+        case .appleSleepingBreathingDisturbances, .forcedExpiratoryVolume1, .forcedVitalCapacity,
+             .inhalerUsage, .oxygenSaturation, .peakExpiratoryFlowRate, .respiratoryRate,
+             .sleepApneaEvent, .chestTightnessOrPain, .coughing, .shortnessOfBreath, .wheezing:
+            return .respiratory
+        case .mindfulSession, .nightSweats, .sleepAnalysis, .sleepChanges:
+            return .sleepMindfulness
+        case .bleedingAfterPregnancy, .bleedingDuringPregnancy, .cervicalMucusQuality, .contraceptive,
+             .infrequentMenstrualCycles, .intermenstrualBleeding, .irregularMenstrualCycles, .lactation,
+             .menstrualFlow, .ovulationTestResult, .persistentIntermenstrualBleeding, .pregnancy,
+             .pregnancyTestResult, .progesteroneTestResult, .prolongedMenstrualPeriods, .sexualActivity,
+             .vaginalDryness:
+            return .reproductiveHealth
+        default:
+            return .symptomsEvents
+        }
+    }
+}
+
 enum HealthSampleUnit: String, Codable, Equatable {
     case count
     case countPerMinute
