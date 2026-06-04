@@ -1,0 +1,151 @@
+name: TestFlight Upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: App Store version for this upload
+        required: true
+        default: "1.0"
+      build_number:
+        description: Build number. Defaults to the GitHub run number when blank.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Archive and upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      APP_VERSION: ${{ inputs.version }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+      ARCHIVE_PATH: ${{ runner.temp }}/HealthSync.xcarchive
+      ASC_KEY_DIR: ${{ runner.temp }}/private_keys
+      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      EXPORT_PATH: ${{ runner.temp }}/HealthSync-export
+      TEAM_ID: 9UR77TD484
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+
+          XCODE_APP="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' -print -quit)"
+          if [[ -n "$XCODE_APP" ]]; then
+            sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          fi
+
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iphoneos SDK: $SDK_VERSION"
+
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          if (( SDK_MAJOR < 26 )); then
+            echo "::error::App Store Connect requires the iOS 26 SDK for iOS uploads. This runner has iphoneos $SDK_VERSION."
+            exit 1
+          fi
+
+      - name: Validate App Store Connect secrets
+        run: |
+          set -euo pipefail
+
+          [[ -n "$APP_STORE_CONNECT_API_KEY_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_KEY_ID secret."; exit 1; }
+          [[ -n "$APP_STORE_CONNECT_API_ISSUER_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_ISSUER_ID secret."; exit 1; }
+          [[ -n "$APP_STORE_CONNECT_API_PRIVATE_KEY" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_PRIVATE_KEY secret."; exit 1; }
+
+      - name: Write App Store Connect API key
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$ASC_KEY_DIR"
+          ASC_KEY_PATH="$ASC_KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          perl -0pi -e 's/\\n/\n/g' "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          echo "ASC_KEY_PATH=$ASC_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Resolve build number
+        run: |
+          set -euo pipefail
+
+          BUILD_NUMBER="${{ inputs.build_number }}"
+          if [[ -z "$BUILD_NUMBER" ]]; then
+            BUILD_NUMBER="$GITHUB_RUN_NUMBER"
+          fi
+
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "Uploading HealthSync $APP_VERSION ($BUILD_NUMBER)"
+
+      - name: Archive HealthSync
+        run: |
+          set -euo pipefail
+
+          xcodebuild archive \
+            -project HealthSync.xcodeproj \
+            -scheme HealthSync \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -archivePath "$ARCHIVE_PATH" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_API_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Create export options
+        run: |
+          set -euo pipefail
+
+          /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :destination string upload" "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :signingStyle string automatic" "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :uploadSymbols bool true" "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :manageAppVersionAndBuildNumber bool false" "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload to TestFlight
+        run: |
+          set -euo pipefail
+
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_API_ISSUER_ID"
+
+      - name: Collect distribution logs
+        if: always()
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RUNNER_TEMP/distribution-logs"
+          find "$RUNNER_TEMP" -name '*.xcdistributionlogs' -print0 | while IFS= read -r -d '' log; do
+            cp -R "$log" "$RUNNER_TEMP/distribution-logs/"
+          done
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-diagnostics
+          path: |
+            ${{ runner.temp }}/ExportOptions.plist
+            ${{ runner.temp }}/HealthSync-export
+            ${{ runner.temp }}/distribution-logs
+          if-no-files-found: ignore
