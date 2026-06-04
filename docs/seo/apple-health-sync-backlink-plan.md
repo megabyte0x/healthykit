@@ -144,6 +144,26 @@ Actions completed:
 - Linked naturally to the primary Apple Health app sync resource and the GitHub Pages project docs.
 - Verified the discussion URL returns public `200` and verified the body through GitHub GraphQL.
 
+### 2d. Personal Portfolio Custom-Domain Link
+
+Status: implemented and live on 2026-06-05.
+
+Why it matters: `www.megabyte.sh` is an existing custom-domain portfolio site with a relevant `/builds` page. A normal project entry there is a cleaner backlink than another synthetic link surface because it is editorially tied to the builder's shipped projects and gives the HealthSync resource a non-GitHub referring domain.
+
+Live URLs:
+
+- https://www.megabyte.sh/builds
+- https://www.megabyte.sh/llms.txt
+
+Actions completed:
+
+- Added `HealthSync` to the `/builds` page with a natural `Apple Health app sync guide` link to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`.
+- Added HealthSync to `llms.txt` as `HealthSync Apple Health app sync`, pointing to the same primary resource page.
+- Built and tested the portfolio site in a temp clone with `yarn build` and `yarn test`.
+- Pushed portfolio commit `83105cb update: add HealthSync build` to `megabyte0x/megabyte0x.xyz`.
+- Deployed the site to Vercel production deployment `dpl_5td24QJ1hzp63fDZaLK518jCA9sH`, aliased to `https://www.megabyte.sh`.
+- Verified with a live fetch that both `https://www.megabyte.sh/builds` and `https://www.megabyte.sh/llms.txt` return `200` and contain the HealthSync target URL.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
