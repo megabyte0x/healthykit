@@ -15,8 +15,27 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate release credentials
+    runs-on: ubuntu-latest
+
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+
+    steps:
+      - name: Validate App Store Connect secrets
+        run: |
+          set -euo pipefail
+
+          [[ -n "$APP_STORE_CONNECT_API_KEY_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_KEY_ID secret."; exit 1; }
+          [[ -n "$APP_STORE_CONNECT_API_ISSUER_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_ISSUER_ID secret."; exit 1; }
+          [[ -n "$APP_STORE_CONNECT_API_PRIVATE_KEY" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_PRIVATE_KEY secret."; exit 1; }
+
   upload:
     name: Archive and upload to TestFlight
+    needs: validate
     runs-on: macos-26
     timeout-minutes: 60
 
@@ -53,14 +72,6 @@ jobs:
             echo "::error::App Store Connect requires the iOS 26 SDK for iOS uploads. This runner has iphoneos $SDK_VERSION."
             exit 1
           fi
-
-      - name: Validate App Store Connect secrets
-        run: |
-          set -euo pipefail
-
-          [[ -n "$APP_STORE_CONNECT_API_KEY_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_KEY_ID secret."; exit 1; }
-          [[ -n "$APP_STORE_CONNECT_API_ISSUER_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_ISSUER_ID secret."; exit 1; }
-          [[ -n "$APP_STORE_CONNECT_API_PRIVATE_KEY" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_PRIVATE_KEY secret."; exit 1; }
 
       - name: Write App Store Connect API key
         run: |

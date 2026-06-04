@@ -19,4 +19,4 @@ The private key secret can be pasted as the raw multiline `.p8` file. The workfl
 3. Keep `version` at `1.0` for the first public TestFlight build unless App Store Connect already has that version.
 4. Leave `build_number` blank to use the GitHub run number.
 
-The workflow runs on `macos-26`, verifies the runner has an iOS 26 SDK, archives `HealthSync`, and uploads the export directly to App Store Connect/TestFlight using automatic signing for team `9UR77TD484`.
+The workflow first validates the App Store Connect secrets on Linux, then runs the archive/upload job on `macos-26`. The macOS job verifies the runner has an iOS 26 SDK, archives `HealthSync`, and uploads the export directly to App Store Connect/TestFlight using automatic signing for team `9UR77TD484`.
