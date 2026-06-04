@@ -251,12 +251,16 @@ Live outreach:
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
 - Evaluated `Dieterbe/awesome-health-fitness-oss`; it is active and relevant, but it is explicitly for Free/Open Source projects. HealthSync currently has no detected license file or GitHub license metadata, so do not submit there until the repo license is chosen.
 - Evaluated `OpenAltFinder`; the submission form is relevant but protected by Cloudflare Turnstile, so it needs a manual browser submission with a valid captcha token.
+- Evaluated the HealthSync GitHub Wiki; repository settings report wiki enabled, but `https://github.com/megabyte0x/healthykit.wiki.git` returns `Repository not found` and rejected an initial wiki-page push. Initialize the wiki from GitHub's web UI before using it as a project-owned documentation backlink.
+- Evaluated `paidx.org`; it has a no-account suggestion form for alternatives, but the endpoint was not exposed through the static HTML. Treat it as a manual suggestion candidate only if HealthSync is positioned as a free alternative to a paid Apple Health export/sync app.
 
 Follow-up actions:
 
 - Monitor both PRs and respond to maintainer feedback quickly.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
+- Initialize the GitHub Wiki in the web UI if another project-owned GitHub documentation backlink is desired.
+- Manually submit to paidx only with honest alternative positioning and license status.
 - Submit to additional relevant Apple Health, HealthKit, self-hosted health, and personal data lists only where HealthSync is a genuine fit.
 - Pitch the resource as `HealthKit to private API sync` rather than generic health tracking.
 
