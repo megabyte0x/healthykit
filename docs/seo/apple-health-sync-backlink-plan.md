@@ -164,6 +164,28 @@ Actions completed:
 - Deployed the site to Vercel production deployment `dpl_5td24QJ1hzp63fDZaLK518jCA9sH`, aliased to `https://www.megabyte.sh`.
 - Verified with a live fetch that both `https://www.megabyte.sh/builds` and `https://www.megabyte.sh/llms.txt` return `200` and contain the HealthSync target URL.
 
+### 2e. Personal Blog Technical Article
+
+Status: implemented and live on 2026-06-05.
+
+Why it matters: a real article gives the backlink surrounding topical copy for `Apple Health app sync`, `HealthKit`, `private backend API`, and `self-hosted health data`. This is a stronger owned-media signal than another short profile link because it explains the problem the target page solves and links from a crawlable BlogPosting route on the custom domain.
+
+Live URL:
+
+- https://www.megabyte.sh/blogs/apple-health-app-sync-to-private-api
+
+Actions completed:
+
+- Published `Apple Health app sync to a private API` on the `megabyte0x.xyz` blog.
+- Linked naturally to `https://web-megabytes-projects.vercel.app/apple-health-app-sync` near the top of the article and again in the resource section.
+- Added the article to `https://www.megabyte.sh/llms.txt`.
+- Regenerated and tracked `public/sitemap.xml`; `public/feed.xml` is generated but ignored by this repo.
+- Updated `scripts/native-blog.test.cjs` so the Hashnode-import coverage check allows additional native posts while still requiring all expected imported slugs.
+- Built and tested the portfolio site with `yarn build` and `yarn test`.
+- Pushed portfolio commit `b3e3635 update: publish HealthSync sync note` to `megabyte0x/megabyte0x.xyz`.
+- Deployed Vercel production deployment `dpl_Gna4J134iA7aLWYc5szGBdXc8fuf`, aliased to `https://www.megabyte.sh`.
+- Verified live fetches: the article returns `200` and contains the HealthSync target URL; sitemap and feed contain the article URL; `llms.txt` contains both the article URL and the target backlink.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
