@@ -93,7 +93,24 @@ Actions completed:
 - Linked naturally to `/apple-health-app-sync`.
 - Described the resource page, HealthKit permission model, private backend sync flow, supported data types, and self-hosted use cases.
 
-### 2a. GitHub Pages Project Documentation
+### 2a. GitHub Profile README
+
+Status: implemented on 2026-06-05.
+
+Why it matters: the public GitHub profile is a crawlable, owner-controlled page with a natural project context. It adds a second GitHub-owned surface that links directly to the Apple Health app sync resource page without depending on a directory maintainer.
+
+Live evidence:
+
+- Raw README includes `HealthSync Apple Health app sync`: https://raw.githubusercontent.com/megabyte0x/megabyte0x/main/README.md
+- Profile repository commit: https://github.com/megabyte0x/megabyte0x/commit/bc01e39af4ac03f040b908eca595eafca1541157
+
+Actions completed:
+
+- Added `HealthSync Apple Health app sync` under the GitHub profile `Projects` section.
+- Linked to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`.
+- Verified the raw README content after push. The rendered `github.com/megabyte0x` profile endpoint may lag due GitHub page caching, so re-check the rendered page before treating it as cache-warmed.
+
+### 2b. GitHub Pages Project Documentation
 
 Status: implemented and live on 2026-06-05.
 
@@ -232,10 +249,14 @@ Live outreach:
 - Opened PR `Add HealthSync project` to Open Source Observer's OSS Directory: https://github.com/opensource-observer/oss-directory/pull/1094
 - The OSS Directory PR adds the HealthSync GitHub artifact plus the Apple Health app sync resource page under `websites`.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
+- Evaluated `Dieterbe/awesome-health-fitness-oss`; it is active and relevant, but it is explicitly for Free/Open Source projects. HealthSync currently has no detected license file or GitHub license metadata, so do not submit there until the repo license is chosen.
+- Evaluated `OpenAltFinder`; the submission form is relevant but protected by Cloudflare Turnstile, so it needs a manual browser submission with a valid captcha token.
 
 Follow-up actions:
 
 - Monitor both PRs and respond to maintainer feedback quickly.
+- Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
+- Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
 - Submit to additional relevant Apple Health, HealthKit, self-hosted health, and personal data lists only where HealthSync is a genuine fit.
 - Pitch the resource as `HealthKit to private API sync` rather than generic health tracking.
 
