@@ -220,7 +220,7 @@ Relevant communities to monitor:
 
 ### 10. Open-Source and Quantified-Self Lists
 
-Status: first submission opened on 2026-06-05.
+Status: multiple submissions opened on 2026-06-05.
 
 Why it matters: topical links from curated lists can be more valuable than generic startup directories.
 
@@ -229,10 +229,13 @@ Live outreach:
 - Opened PR `Add HealthSync` to `woop/awesome-quantified-self`: https://github.com/woop/awesome-quantified-self/pull/140
 - The PR adds HealthSync under `Applications and Platforms` -> `Aggregators & Dashboards`.
 - The entry links to the Apple Health app sync resource page with the description `Sync selected Apple Health data to a private backend API (iOS).`
+- Opened PR `Add HealthSync project` to Open Source Observer's OSS Directory: https://github.com/opensource-observer/oss-directory/pull/1094
+- The OSS Directory PR adds the HealthSync GitHub artifact plus the Apple Health app sync resource page under `websites`.
+- Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
 
 Follow-up actions:
 
-- Monitor the PR and respond to maintainer feedback quickly.
+- Monitor both PRs and respond to maintainer feedback quickly.
 - Submit to additional relevant Apple Health, HealthKit, self-hosted health, and personal data lists only where HealthSync is a genuine fit.
 - Pitch the resource as `HealthKit to private API sync` rather than generic health tracking.
 
