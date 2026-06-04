@@ -127,6 +127,23 @@ Actions completed:
 - Added a docs index page linking to the same primary resource page.
 - Enabled GitHub Pages from `main` `/docs`; the project docs and Apple Health sync docs URLs return `200`.
 
+### 2c. GitHub Discussions Announcement
+
+Status: implemented on 2026-06-05.
+
+Why it matters: GitHub Discussions adds a public, project-owned documentation and announcement surface on the repository. It is weaker than accepted third-party directory links, but stronger than an artificial link page because it lives in the project context and can answer the exact HealthKit-to-private-API use case.
+
+Live URL:
+
+- https://github.com/megabyte0x/healthykit/discussions/1
+
+Actions completed:
+
+- Enabled GitHub Discussions for `megabyte0x/healthykit`.
+- Created discussion `Apple Health app sync to a private backend` in `Announcements`.
+- Linked naturally to the primary Apple Health app sync resource and the GitHub Pages project docs.
+- Verified the discussion URL returns public `200` and verified the body through GitHub GraphQL.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
@@ -253,6 +270,7 @@ Live outreach:
 - Evaluated `OpenAltFinder`; the submission form is relevant but protected by Cloudflare Turnstile, so it needs a manual browser submission with a valid captcha token.
 - Evaluated the HealthSync GitHub Wiki; repository settings report wiki enabled, but `https://github.com/megabyte0x/healthykit.wiki.git` returns `Repository not found` and rejected an initial wiki-page push. Initialize the wiki from GitHub's web UI before using it as a project-owned documentation backlink.
 - Evaluated `paidx.org`; it has a no-account suggestion form for alternatives, but the endpoint was not exposed through the static HTML. Treat it as a manual suggestion candidate only if HealthSync is positioned as a free alternative to a paid Apple Health export/sync app.
+- Evaluated pinning `megabyte0x/healthykit` on the GitHub profile. The profile already has six pinned repositories, so do not replace a pin without explicit approval.
 
 Follow-up actions:
 
@@ -261,6 +279,7 @@ Follow-up actions:
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
 - Initialize the GitHub Wiki in the web UI if another project-owned GitHub documentation backlink is desired.
 - Manually submit to paidx only with honest alternative positioning and license status.
+- Pin `megabyte0x/healthykit` on the GitHub profile only after choosing which existing pinned repository to replace.
 - Submit to additional relevant Apple Health, HealthKit, self-hosted health, and personal data lists only where HealthSync is a genuine fit.
 - Pitch the resource as `HealthKit to private API sync` rather than generic health tracking.
 
