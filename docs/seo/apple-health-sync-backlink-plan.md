@@ -95,11 +95,11 @@ Actions completed:
 
 ### 2a. GitHub Pages Project Documentation
 
-Status: implemented on 2026-06-05; pending GitHub Pages deployment from `main` `/docs`.
+Status: implemented and live on 2026-06-05.
 
 Why it matters: GitHub Pages gives the project a second crawlable documentation surface on `github.io`, separate from the Vercel app and GitHub repository UI. The page is technical documentation with natural links to the primary Apple Health app sync guide, the source repository, and the launch release.
 
-Planned live URL:
+Live URL:
 
 - https://megabyte0x.github.io/healthykit/apple-health-app-sync/
 
@@ -108,6 +108,7 @@ Actions completed:
 - Added static project docs under `docs/` with `.nojekyll` so GitHub Pages can serve the files directly.
 - Added an Apple Health app sync documentation page with implementation details and a natural link to `/apple-health-app-sync`.
 - Added a docs index page linking to the same primary resource page.
+- Enabled GitHub Pages from `main` `/docs`; the project docs and Apple Health sync docs URLs return `200`.
 
 ### 3. Product Hunt
 
