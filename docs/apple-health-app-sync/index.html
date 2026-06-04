@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Apple Health App Sync Documentation | HealthSync</title>
+    <meta
+      name="description"
+      content="How HealthSync uses HealthKit on iPhone to sync selected Apple Health metrics and workouts to a private backend API."
+    >
+    <link rel="canonical" href="https://megabyte0x.github.io/healthykit/apple-health-app-sync/">
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172026;
+        background: #f6f8f5;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        width: min(820px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 64px 0;
+      }
+
+      a {
+        color: #0f766e;
+      }
+
+      h1 {
+        font-size: 2.35rem;
+        line-height: 1.08;
+        margin: 0 0 18px;
+      }
+
+      h2 {
+        margin-top: 42px;
+      }
+
+      p,
+      li {
+        font-size: 1rem;
+        line-height: 1.7;
+      }
+
+      code {
+        background: #e8eeea;
+        border-radius: 4px;
+        padding: 2px 5px;
+      }
+
+      .lead {
+        font-size: 1.15rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Apple Health App Sync Documentation</h1>
+      <p class="lead">
+        HealthSync gives developers and quantified-self users a direct path from Apple
+        Health on iPhone to a private API without granting a third-party cloud broad
+        access to their health data.
+      </p>
+      <p>
+        The public product and setup overview lives at the
+        <a href="https://web-megabytes-projects.vercel.app/apple-health-app-sync">
+          HealthSync Apple Health app sync guide
+        </a>.
+        This page summarizes the technical implementation for people evaluating the
+        open-source project.
+      </p>
+
+      <h2>Sync Model</h2>
+      <ul>
+        <li>The iOS app requests HealthKit permission on-device for selected data types.</li>
+        <li>HealthSync normalizes supported metrics and workouts into JSON payloads.</li>
+        <li>Batches are stored locally before upload, then posted to the configured backend URL.</li>
+        <li>The backend accepts authenticated <code>POST /api/apple-health/sync</code> requests.</li>
+        <li>Users can self-host the FastAPI backend or use hosted storage when enabled.</li>
+      </ul>
+
+      <h2>Best-Fit Use Cases</h2>
+      <ul>
+        <li>Self-hosted Apple Health dashboards backed by Postgres, Grafana, or custom APIs.</li>
+        <li>Personal data warehouses where HealthKit export files are too slow or manual.</li>
+        <li>AI agent workflows that need private, read-only access to selected health history.</li>
+        <li>Developer prototypes that need real HealthKit data without building the whole iOS sync layer.</li>
+      </ul>
+
+      <h2>Project Links</h2>
+      <ul>
+        <li><a href="https://web-megabytes-projects.vercel.app/apple-health-app-sync">Apple Health app sync guide</a></li>
+        <li><a href="https://github.com/megabyte0x/healthykit">HealthSync source code on GitHub</a></li>
+        <li><a href="https://github.com/megabyte0x/healthykit/releases/tag/healthsync-web-seo-launch-2026-06-05">HealthSync web launch release notes</a></li>
+      </ul>
+    </main>
+  </body>
+</html>
