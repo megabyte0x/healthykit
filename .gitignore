@@ -8,3 +8,13 @@ __pycache__/
 *.xcuserstate
 xcuserdata/
 HealthSync.xcodeproj/project.xcworkspace/xcuserdata/
+web/.next/
+web/node_modules/
+web/out/
+web/data/*.jsonl
+web/.env
+web/.env*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+web/*.tsbuildinfo

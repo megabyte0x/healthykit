@@ -4,6 +4,10 @@ HealthSync is a native SwiftUI iOS app that reads selected Apple Health data on-
 
 There is no iCloud or server-side Apple Health REST API. Apple Health reads happen only on the iPhone after the user grants HealthKit read permissions. Health data stays on-device until the user configures a backend URL and auth token.
 
+Website: https://web-megabytes-projects.vercel.app
+
+Apple Health app sync guide: https://web-megabytes-projects.vercel.app/apple-health-app-sync
+
 ## What It Syncs
 
 - Steps, heart rate, resting heart rate, HRV SDNN
@@ -180,3 +184,17 @@ Manual sync and backfill are the reliable paths.
 - Use HTTPS for production backends.
 - The backend should dedupe by `device_id`, `export_id`, and record IDs.
 - The app never prints auth tokens or raw health payloads to console logs.
+
+## TestFlight Access Web App
+
+The `web/` directory contains a small Next.js app where testers can request HealthSync TestFlight access.
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Local requests are appended to `web/data/testflight-requests.jsonl`, which is ignored by git. Set `TESTFLIGHT_REQUEST_WEBHOOK_URL` to forward validated requests to a production workflow.
+
+Production deployments should use durable storage. The Vercel deployment stores requests in private Vercel Blob records when Blob env vars are configured, and exposes a bearer-token-protected admin export at `/api/access-requests`. See `web/README.md` for Vercel setup, health checks, and export commands.
