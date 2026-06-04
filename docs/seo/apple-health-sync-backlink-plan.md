@@ -220,13 +220,20 @@ Relevant communities to monitor:
 
 ### 10. Open-Source and Quantified-Self Lists
 
-Status: queued after repo positioning is complete.
+Status: first submission opened on 2026-06-05.
 
 Why it matters: topical links from curated lists can be more valuable than generic startup directories.
 
-Actions:
+Live outreach:
 
-- Submit to relevant Apple Health, HealthKit, quantified-self, self-hosted, and personal data lists only when the repo has clear setup instructions.
+- Opened PR `Add HealthSync` to `woop/awesome-quantified-self`: https://github.com/woop/awesome-quantified-self/pull/140
+- The PR adds HealthSync under `Applications and Platforms` -> `Aggregators & Dashboards`.
+- The entry links to the Apple Health app sync resource page with the description `Sync selected Apple Health data to a private backend API (iOS).`
+
+Follow-up actions:
+
+- Monitor the PR and respond to maintainer feedback quickly.
+- Submit to additional relevant Apple Health, HealthKit, self-hosted health, and personal data lists only where HealthSync is a genuine fit.
 - Pitch the resource as `HealthKit to private API sync` rather than generic health tracking.
 
 Potential target classes:
