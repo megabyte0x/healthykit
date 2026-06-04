@@ -44,10 +44,6 @@ jobs:
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
       APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
-      ARCHIVE_PATH: ${{ runner.temp }}/HealthSync.xcarchive
-      ASC_KEY_DIR: ${{ runner.temp }}/private_keys
-      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
-      EXPORT_PATH: ${{ runner.temp }}/HealthSync-export
       TEAM_ID: 9UR77TD484
 
     steps:
@@ -72,6 +68,15 @@ jobs:
             echo "::error::App Store Connect requires the iOS 26 SDK for iOS uploads. This runner has iphoneos $SDK_VERSION."
             exit 1
           fi
+
+      - name: Configure release paths
+        run: |
+          set -euo pipefail
+
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/HealthSync.xcarchive" >> "$GITHUB_ENV"
+          echo "ASC_KEY_DIR=$RUNNER_TEMP/private_keys" >> "$GITHUB_ENV"
+          echo "DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/HealthSync-export" >> "$GITHUB_ENV"
 
       - name: Write App Store Connect API key
         run: |
