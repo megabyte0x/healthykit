@@ -77,7 +77,23 @@ Target URL: `/apple-health-app-sync`
 
 Suggested anchor: `Apple Health app sync guide`
 
-### 2. Product Hunt
+### 2. GitHub Release Announcement
+
+Status: implemented on 2026-06-05.
+
+Why it matters: GitHub Release pages are crawlable, attached to a public repository, and provide a legitimate project announcement surface rather than an artificial link page.
+
+Live release:
+
+- https://github.com/megabyte0x/healthykit/releases/tag/healthsync-web-seo-launch-2026-06-05
+
+Actions completed:
+
+- Created release `healthsync-web-seo-launch-2026-06-05`.
+- Linked naturally to `/apple-health-app-sync`.
+- Described the resource page, HealthKit permission model, private backend sync flow, supported data types, and self-hosted use cases.
+
+### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
 
@@ -94,7 +110,7 @@ Suggested title: `HealthSync`
 
 Suggested tagline: `Sync selected Apple Health data to your own backend`
 
-### 3. App Store Listing
+### 4. App Store Listing
 
 Status: queued until public App Store/TestFlight listing is ready.
 
@@ -106,7 +122,7 @@ Actions:
 - Link the marketing URL to `/apple-health-app-sync`.
 - Avoid brand confusion with the existing App Store `HealthSync` by differentiating with `private API`, `self-hosted`, or a naming update if needed.
 
-### 4. BetaList
+### 5. BetaList
 
 Status: blocked by domain prerequisite.
 
@@ -121,7 +137,7 @@ Actions:
 
 Target URL: custom domain `/apple-health-app-sync`
 
-### 5. SaaSHub
+### 6. SaaSHub
 
 Status: queued; requires product submission and verification.
 
@@ -133,7 +149,7 @@ Actions:
 - Use the resource page as the website URL.
 - Answer Q&A after verification to add unique topical content.
 
-### 6. Alternative Directories
+### 7. Alternative Directories
 
 Status: queued; fit depends on public availability.
 
@@ -150,7 +166,7 @@ Reference:
 - AlternativeTo app discovery/about page: https://alternativeto.net/software/alternativeto/about/
 - Alternative.me submission flow: https://alternative.me/how-to/submit-software/
 
-### 7. Hacker News Show HN
+### 8. Hacker News Show HN
 
 Status: not ready unless people can try the app without a waitlist bottleneck.
 
@@ -164,7 +180,7 @@ Actions:
 - Title: `Show HN: HealthSync - sync Apple Health data to your own API`.
 - First comment should explain HealthKit constraints, privacy model, backend contract, and what feedback is needed.
 
-### 8. Reddit and Community Mentions
+### 9. Reddit and Community Mentions
 
 Status: queued; only use when answering real user problems.
 
@@ -185,7 +201,7 @@ Relevant communities to monitor:
 - r/shortcuts
 - r/webdev
 
-### 9. Open-Source and Quantified-Self Lists
+### 10. Open-Source and Quantified-Self Lists
 
 Status: queued after repo positioning is complete.
 
