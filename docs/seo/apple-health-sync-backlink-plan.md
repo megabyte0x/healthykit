@@ -233,7 +233,7 @@ Actions completed:
 
 ### 2h. Apple Health Sync Alternatives Page
 
-Status: implemented locally on 2026-06-05; deploy through the normal main-branch Vercel flow.
+Status: implemented and live on 2026-06-05.
 
 Why it matters: current search results show competitor and alternative-intent pages for the existing App Store `HealthSync`, appyhapps `Health Sync`, SaaSHub `Health Sync alternatives`, Apple Health alternatives, and tools such as Health Auto Export. A focused comparison page gives HealthSync a crawlable target for `Apple Health sync alternatives`, clarifies the shared-name problem, and internally links back to the primary Apple Health app sync guide.
 
@@ -242,6 +242,8 @@ Actions:
 - Added `/apple-health-sync-alternatives` with canonical metadata, TechArticle/ItemList schema, and comparison copy for HealthSync, Health Auto Export, Health Sync, and one-off HealthKit export scripts.
 - Linked the alternatives page from `/apple-health-app-sync`.
 - Added `/apple-health-sync-alternatives` to the Next.js sitemap.
+- Deployed production Vercel deployment `dpl_EsQhXVnSQ19GMjrEVaLE11TvgQjd`, aliased to `https://healthsync.megabyte.sh`.
+- Verified the live alternatives page returns `200` with `x-robots-tag: index, follow`, the live HTML contains the comparison content and canonical URL, the primary guide links to `/apple-health-sync-alternatives`, and the live sitemap includes the new URL.
 
 ### 3. Product Hunt
 
