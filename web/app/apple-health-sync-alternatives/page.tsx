@@ -115,6 +115,8 @@ export default function AppleHealthSyncAlternativesPage() {
         </a>
         <nav aria-label="Page">
           <a href="/apple-health-app-sync">Sync guide</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/support">Support</a>
           <a href="#comparison">Compare</a>
           <a href="#private-api">Private API fit</a>
         </nav>

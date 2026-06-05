@@ -31,8 +31,8 @@ const previewRows = [
 
 const privacyDetails = [
   {
-    title: "Access requests only",
-    body: "We collect your name, email, and iOS device only to review requests and send TestFlight invitations.",
+    title: "Access and support only",
+    body: "We collect your name, email, and iOS device only to manage access requests and HealthSync communication.",
     icon: "person"
   },
   {
@@ -41,8 +41,8 @@ const privacyDetails = [
     icon: "lock"
   },
   {
-    title: "Used for the beta",
-    body: "Your information is used only for HealthSync beta access and communication.",
+    title: "Clear privacy policy",
+    body: "The full App Store privacy policy explains app storage, hosted storage, and deletion requests.",
     icon: "shield"
   }
 ];
@@ -288,7 +288,8 @@ export default function Home() {
         <nav aria-label="Page">
           <a href="#product">Product</a>
           <a href="/apple-health-app-sync">Sync guide</a>
-          <a href="#privacy">Privacy</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/support">Support</a>
           <a href="#faq">FAQ</a>
           <a className="nav-action" href="#request-access">Request access</a>
         </nav>
@@ -361,12 +362,15 @@ export default function Home() {
             </div>
             <h2 id="privacy-title">Privacy, built into the request.</h2>
             <p>
-              We collect only what is needed to send TestFlight invitations: your name, email, and iOS device. We never read or access your Apple Health data.
+              We collect only what is needed to manage HealthSync access and support: your name,
+              email, and iOS device. We never read or access your Apple Health data from this
+              website.
             </p>
             <div className="privacy-note">
               <Icon name="shield" />
               <span>Your health data stays on your device unless you choose to sync it inside the app.</span>
             </div>
+            <a className="inline-resource-link" href="/privacy">Read the full privacy policy</a>
           </div>
 
           <div className="privacy-points">

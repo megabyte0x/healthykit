@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "HealthSync - Apple Health App Sync for Private APIs",
     description:
-      "Request TestFlight access for the iOS app that syncs selected Apple Health data to your own backend.",
+      "Privacy-first iOS Apple Health sync for selected HealthKit data and private API endpoints.",
     url: "/",
     siteName: "HealthSync",
     type: "website",

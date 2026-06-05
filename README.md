@@ -8,6 +8,10 @@ Website: https://healthysync.megabyte.sh
 
 Apple Health app sync guide: https://healthysync.megabyte.sh/apple-health-app-sync
 
+Privacy policy: https://healthysync.megabyte.sh/privacy
+
+Support: https://healthysync.megabyte.sh/support
+
 ## What It Syncs
 
 - Steps, heart rate, resting heart rate, HRV SDNN

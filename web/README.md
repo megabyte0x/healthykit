@@ -2,6 +2,11 @@
 
 This Next.js app collects HealthSync TestFlight access requests.
 
+Public App Store URLs:
+
+- Privacy policy: https://healthysync.megabyte.sh/privacy
+- Support: https://healthysync.megabyte.sh/support
+
 ## Run locally
 
 ```bash

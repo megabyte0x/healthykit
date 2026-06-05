@@ -987,6 +987,14 @@ select:hover {
   margin: 0;
 }
 
+.resource-proof dd a {
+  color: var(--green-dark);
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-color: rgba(14, 107, 49, 0.32);
+  text-underline-offset: 4px;
+}
+
 .resource-band {
   border-top: 1px solid var(--border);
   padding: clamp(70px, 8vw, 108px) 0;
@@ -1070,6 +1078,98 @@ select:hover {
   background: var(--red);
 }
 
+.resource-list.ordered {
+  counter-reset: ordered-list;
+}
+
+.resource-list.ordered li {
+  counter-increment: ordered-list;
+  padding-left: 42px;
+}
+
+.resource-list.ordered li::before {
+  align-items: center;
+  background: var(--green);
+  color: #ffffff;
+  content: counter(ordered-list);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 820;
+  height: 24px;
+  justify-content: center;
+  left: 0;
+  top: 17px;
+  width: 24px;
+}
+
+.policy-updated {
+  color: var(--faint);
+  font-size: 0.94rem;
+  font-weight: 720;
+  line-height: 1.4;
+  margin-top: 24px;
+}
+
+.policy-summary-grid,
+.support-issue-list {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0;
+  margin-top: clamp(32px, 4.5vw, 54px);
+}
+
+.policy-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.policy-summary-grid article,
+.support-issue-list article {
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+  padding: 24px clamp(18px, 2.8vw, 34px) 24px 0;
+}
+
+.policy-summary-grid article + article {
+  border-left: 1px solid var(--border);
+  padding-left: clamp(18px, 2.8vw, 34px);
+}
+
+.policy-summary-grid h3,
+.support-issue-list h3 {
+  color: #151719;
+  font-size: clamp(1.06rem, 1.16vw, 1.22rem);
+  font-weight: 790;
+  line-height: 1.25;
+}
+
+.policy-summary-grid p,
+.support-issue-list p {
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  margin-top: 12px;
+}
+
+.policy-copy-list {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.policy-copy-list li {
+  padding-left: 4px;
+}
+
+.support-issue-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.support-issue-list article:nth-child(2n) {
+  border-left: 1px solid var(--border);
+  padding-left: clamp(18px, 2.8vw, 34px);
+}
+
 .comparison-table {
   border-top: 1px solid var(--border);
   display: grid;
@@ -1133,7 +1233,9 @@ select:hover {
   .faq-grid,
   .resource-hero-grid,
   .resource-columns,
-  .resource-list-grid {
+  .resource-list-grid,
+  .policy-summary-grid,
+  .support-issue-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1175,6 +1277,12 @@ select:hover {
   .step + .step {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+
+  .policy-summary-grid article + article,
+  .support-issue-list article:nth-child(2n) {
+    border-left: 0;
+    padding-left: 0;
   }
 }
 
