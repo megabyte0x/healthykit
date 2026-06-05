@@ -2,9 +2,9 @@
 
 Date: 2026-06-05
 
-Target site: https://web-megabytes-projects.vercel.app
+Target site: https://healthsync.megabyte.sh
 
-Primary link target: https://web-megabytes-projects.vercel.app/apple-health-app-sync
+Primary link target: https://healthsync.megabyte.sh/apple-health-app-sync
 
 Primary query family:
 
@@ -16,7 +16,7 @@ Primary query family:
 
 ## Current Baseline
 
-The live site returns `200` with `index, follow`, but the existing homepage metadata was thin: `HealthSync TestFlight Access` and `Request access to the HealthSync TestFlight app.` Search results for exact/current HealthSync wording showed App Store and competitor pages, not the Vercel site.
+The live site returns `200` with `index, follow`, but the existing homepage metadata was thin: `HealthSync TestFlight Access` and `Request access to the HealthSync TestFlight app.` Search results for exact/current HealthSync wording showed App Store and competitor pages, not the HealthSync site.
 
 The SERP is already competitive and mixed-intent. Current visible results for Apple Health sync terms include:
 
@@ -69,7 +69,7 @@ Why it matters: the repo is public at `github.com/megabyte0x/healthykit`; GitHub
 Actions:
 
 - Keep the README links to the homepage and `/apple-health-app-sync`.
-- Repository metadata now points the homepage to `/apple-health-app-sync`.
+- Repository metadata now points the homepage to `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - Repository topics are now set to `apple-health`, `applehealth`, `healthkit`, `ios`, `swiftui`, `self-hosted`, `health-data`, `health-tracking`, `fastapi`, `apple-health-sync`, `healthkit-api`, `apple-healthkit`, `health-api`, `personal-health-data`, and `ios-health`.
 - Added exact-query topic coverage on 2026-06-05. The topic pages for `apple-health-sync`, `healthkit-api`, `apple-healthkit`, and `personal-health-data` return `200`, and the repo homepage metadata still points to the primary Apple Health app sync resource page.
 - Pin or feature the repo from the user profile if appropriate.
@@ -207,7 +207,7 @@ Actions completed:
 
 Status: implemented and live on 2026-06-05.
 
-Why it matters: `healthsync.megabyte.sh` gives outreach and directory submissions a project-specific custom-domain URL instead of a `vercel.app` hosting subdomain. That removes a common product-directory blocker and makes the link target more credible while the page canonical remains pointed at the primary Vercel resource page.
+Why it matters: `healthsync.megabyte.sh` gives outreach and directory submissions a project-specific custom-domain URL instead of a `vercel.app` hosting subdomain. That removes a common product-directory blocker and makes the link target more credible for search results and directories.
 
 Live URLs:
 
@@ -219,7 +219,10 @@ Actions completed:
 
 - Added `healthsync.megabyte.sh` to the linked Vercel project `web`.
 - Verified `/`, `/apple-health-app-sync`, and `/sitemap.xml` return `200` with `index, follow`.
-- Verified `/apple-health-app-sync` still emits canonical, Open Graph, and JSON-LD URLs for `https://web-megabytes-projects.vercel.app/apple-health-app-sync`, so custom-domain directory links should consolidate signals to the primary target instead of creating a competing canonical.
+- Switched the app default canonical base URL, repository README links, GitHub Pages documentation links, and production `NEXT_PUBLIC_SITE_URL` target to `https://healthsync.megabyte.sh` so the custom domain is the primary SEO surface.
+- Deployed production Vercel deployment `dpl_59DSAr8Yt9CR45a7fA29JV6wXuZt`, aliased to `https://healthsync.megabyte.sh`.
+- Verified the live `/apple-health-app-sync` page returns `200` with `x-robots-tag: index, follow`, and now emits canonical, Open Graph, Twitter image, and TechArticle schema URLs on `https://healthsync.megabyte.sh`.
+- Verified the live sitemap now lists `https://healthsync.megabyte.sh` and `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - `vercel domains inspect healthsync.megabyte.sh` still returns a Vercel CLI `403` for subdomain metadata, despite DNS and HTTP serving correctly. Treat the live HTTP evidence as authoritative and re-check the Vercel dashboard later if project-domain metadata needs cleanup.
 
 ### 3. Product Hunt
@@ -401,11 +404,11 @@ Founder/community note:
 
 Suggested link target:
 
-> https://web-megabytes-projects.vercel.app/apple-health-app-sync
+> https://healthsync.megabyte.sh/apple-health-app-sync
 
 ## Prerequisites Before Larger Outreach
 
-- Use the live custom domain `https://healthsync.megabyte.sh` for directories that reject free hosting subdomains; keep canonical URLs clean so signals consolidate to `/apple-health-app-sync`.
+- Use the live custom domain `https://healthsync.megabyte.sh` for new directories and outreach; keep canonical URLs clean so signals consolidate to `/apple-health-app-sync`.
 - Add screenshots and a 30-60 second demo GIF/video.
 - Confirm the GitHub repo is public, has topics, and has the website URL in repository metadata.
 - Add Search Console and submit `sitemap.xml`.

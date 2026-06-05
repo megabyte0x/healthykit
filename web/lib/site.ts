@@ -1,5 +1,5 @@
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://web-megabytes-projects.vercel.app"
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://healthsync.megabyte.sh"
 ).replace(/\/+$/, "");
 
 export function absoluteUrl(path = "/") {

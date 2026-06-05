@@ -46,7 +46,7 @@ Set `NEXT_PUBLIC_SITE_URL` to the canonical public URL. If using an existing Blo
 Requests can be exported from the protected admin endpoint:
 
 ```bash
-SITE_URL=https://web-megabytes-projects.vercel.app \
+SITE_URL=https://healthsync.megabyte.sh \
 TESTFLIGHT_ADMIN_TOKEN=... \
 npm run export:requests
 ```
@@ -55,13 +55,13 @@ The endpoint also supports JSON:
 
 ```bash
 curl -H "Authorization: Bearer $TESTFLIGHT_ADMIN_TOKEN" \
-  "https://web-megabytes-projects.vercel.app/api/access-requests"
+  "https://healthsync.megabyte.sh/api/access-requests"
 ```
 
 ## Health check
 
 ```bash
-SITE_URL=https://web-megabytes-projects.vercel.app npm run health
+SITE_URL=https://healthsync.megabyte.sh npm run health
 ```
 
 The health endpoint reports `storage: "vercel-blob"` when production storage is correctly configured.
