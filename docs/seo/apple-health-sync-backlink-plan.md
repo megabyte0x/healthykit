@@ -91,8 +91,9 @@ Live release:
 Actions completed:
 
 - Created release `healthsync-web-seo-launch-2026-06-05`.
-- Linked naturally to `/apple-health-app-sync`.
+- Linked naturally to `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - Described the resource page, HealthKit permission model, private backend sync flow, supported data types, and self-hosted use cases.
+- Updated the release notes on 2026-06-05 so the public backlink uses the canonical custom-domain target.
 
 ### 2a. GitHub Profile README
 
@@ -103,13 +104,13 @@ Why it matters: the public GitHub profile is a crawlable, owner-controlled page 
 Live evidence:
 
 - Raw README includes `HealthSync Apple Health app sync`: https://raw.githubusercontent.com/megabyte0x/megabyte0x/main/README.md
-- Profile repository commit: https://github.com/megabyte0x/megabyte0x/commit/bc01e39af4ac03f040b908eca595eafca1541157
+- Profile repository custom-domain update commit: https://github.com/megabyte0x/megabyte0x/commit/5ed4e20
 
 Actions completed:
 
 - Added `HealthSync Apple Health app sync` under the GitHub profile `Projects` section.
-- Linked to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`.
-- Verified the raw README content after push. The rendered `github.com/megabyte0x` profile endpoint may lag due GitHub page caching, so re-check the rendered page before treating it as cache-warmed.
+- Linked to `https://healthsync.megabyte.sh/apple-health-app-sync`.
+- Verified the README content through the GitHub Contents API after push. The rendered `github.com/megabyte0x` profile endpoint may lag due GitHub page caching, so re-check the rendered page before treating it as cache-warmed.
 
 ### 2b. GitHub Pages Project Documentation
 
@@ -158,12 +159,15 @@ Live URLs:
 
 Actions completed:
 
-- Added `HealthSync` to the `/builds` page with a natural `Apple Health app sync guide` link to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`.
+- Added `HealthSync` to the `/builds` page with a natural `Apple Health app sync guide` link to `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - Added HealthSync to `llms.txt` as `HealthSync Apple Health app sync`, pointing to the same primary resource page.
 - Built and tested the portfolio site in a temp clone with `yarn build` and `yarn test`.
 - Pushed portfolio commit `83105cb update: add HealthSync build` to `megabyte0x/megabyte0x.xyz`.
 - Deployed the site to Vercel production deployment `dpl_5td24QJ1hzp63fDZaLK518jCA9sH`, aliased to `https://www.megabyte.sh`.
 - Verified with a live fetch that both `https://www.megabyte.sh/builds` and `https://www.megabyte.sh/llms.txt` return `200` and contain the HealthSync target URL.
+- Consolidated the portfolio links to the custom-domain target in commit `4d59ab7 update: use HealthSync custom domain`.
+- Deployed Vercel production deployment `dpl_ECWrsSa3zHVvfXcyMYHdPHQQ2XmQ`, aliased to `https://www.megabyte.sh`.
+- Verified live `/builds`, the Apple Health sync blog article, and `/llms.txt` contain `https://healthsync.megabyte.sh/apple-health-app-sync` and do not contain the old Vercel target.
 
 ### 2e. Personal Blog Technical Article
 
@@ -178,7 +182,7 @@ Live URL:
 Actions completed:
 
 - Published `Apple Health app sync to a private API` on the `megabyte0x.xyz` blog.
-- Linked naturally to `https://web-megabytes-projects.vercel.app/apple-health-app-sync` near the top of the article and again in the resource section.
+- Linked naturally to `https://healthsync.megabyte.sh/apple-health-app-sync` near the top of the article and again in the resource section.
 - Added the article to `https://www.megabyte.sh/llms.txt`.
 - Regenerated and tracked `public/sitemap.xml`; `public/feed.xml` is generated but ignored by this repo.
 - Updated `scripts/native-blog.test.cjs` so the Hashnode-import coverage check allows additional native posts while still requiring all expected imported slugs.
@@ -186,6 +190,7 @@ Actions completed:
 - Pushed portfolio commit `b3e3635 update: publish HealthSync sync note` to `megabyte0x/megabyte0x.xyz`.
 - Deployed Vercel production deployment `dpl_Gna4J134iA7aLWYc5szGBdXc8fuf`, aliased to `https://www.megabyte.sh`.
 - Verified live fetches: the article returns `200` and contains the HealthSync target URL; sitemap and feed contain the article URL; `llms.txt` contains both the article URL and the target backlink.
+- Consolidated the article and `llms.txt` backlinks to the custom-domain HealthSync target in portfolio commit `4d59ab7`, then redeployed `www.megabyte.sh` in production deployment `dpl_ECWrsSa3zHVvfXcyMYHdPHQQ2XmQ`.
 
 ### 2f. GitHub Gist Technical Reference
 
@@ -200,8 +205,9 @@ Live URL:
 Actions completed:
 
 - Created `Apple Health app sync to a private API` as a public GitHub Gist.
-- Linked naturally to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`, `https://github.com/megabyte0x/healthykit`, `https://megabyte0x.github.io/healthykit/apple-health-app-sync/`, and the GitHub launch release.
-- Verified the Gist page returns `200` and the raw Gist content contains the target URL and related project links.
+- Linked naturally to `https://healthsync.megabyte.sh/apple-health-app-sync`, `https://github.com/megabyte0x/healthykit`, `https://megabyte0x.github.io/healthykit/apple-health-app-sync/`, and the GitHub launch release.
+- Updated the Gist content on 2026-06-05 so the product/setup links use the canonical custom-domain target.
+- Verified the Gist content through the GitHub API after update.
 
 ### 2g. Custom-Domain HealthSync URL
 
@@ -362,6 +368,14 @@ Live outreach:
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
 - Created public GitHub Gist `Apple Health app sync to a private API`: https://gist.github.com/megabyte0x/5ceb317b2b30eb97ce3cd5c9e8f645e3
 - The Gist explains the HealthKit-to-private-API sync model and links to the primary Apple Health app sync resource page, GitHub source, GitHub Pages docs, and launch release. Verified the public page returns `200` and the raw content contains the target URL.
+- Consolidated open PR branch backlinks to the custom-domain target on 2026-06-05:
+- `woop/awesome-quantified-self#140` head `c5292c0`, open and mergeable clean.
+- `opensource-observer/oss-directory#1094` head `17a1ed54`, open and mergeable unstable due existing checks.
+- `dkhamsing/open-source-ios-apps#2233` head `02728df3`, open and mergeable unstable due existing checks.
+- `Correia-jpv/fucking-open-source-ios-apps#2` head `5e8dad38`, open and mergeable clean.
+- `jogendra/example-ios-apps#124` head `c18860a`, open and mergeable clean.
+- `Mylittleswift/ios-health-fitness-apps#1` head `bd4d611`, open and mergeable clean.
+- `ygit/swiftui#36` head `b42ca13`, open and mergeable with upstream branch protection reported as blocked.
 - Evaluated `Dieterbe/awesome-health-fitness-oss`; it is active and relevant, but it is explicitly for Free/Open Source projects. HealthSync currently has no detected license file or GitHub license metadata, so do not submit there until the repo license is chosen.
 - Evaluated `vsouza/awesome-ios`; it is active and high-authority, but contribution rules require 100+ GitHub stars, more than one contributor, an OSI-approved license, and Swift Package Manager support. HealthSync does not qualify yet, so do not submit until those hard requirements are met.
 - Evaluated `openappssh/openapps`; it has a relevant `fitness` category and a self-hosted project comparison format, but guidelines require open-source projects with clear licensing. HealthSync currently lacks license metadata, so do not submit until the license is chosen.
