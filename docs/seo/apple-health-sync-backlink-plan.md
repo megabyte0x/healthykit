@@ -203,6 +203,25 @@ Actions completed:
 - Linked naturally to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`, `https://github.com/megabyte0x/healthykit`, `https://megabyte0x.github.io/healthykit/apple-health-app-sync/`, and the GitHub launch release.
 - Verified the Gist page returns `200` and the raw Gist content contains the target URL and related project links.
 
+### 2g. Custom-Domain HealthSync URL
+
+Status: implemented and live on 2026-06-05.
+
+Why it matters: `healthsync.megabyte.sh` gives outreach and directory submissions a project-specific custom-domain URL instead of a `vercel.app` hosting subdomain. That removes a common product-directory blocker and makes the link target more credible while the page canonical remains pointed at the primary Vercel resource page.
+
+Live URLs:
+
+- https://healthsync.megabyte.sh/
+- https://healthsync.megabyte.sh/apple-health-app-sync
+- https://healthsync.megabyte.sh/sitemap.xml
+
+Actions completed:
+
+- Added `healthsync.megabyte.sh` to the linked Vercel project `web`.
+- Verified `/`, `/apple-health-app-sync`, and `/sitemap.xml` return `200` with `index, follow`.
+- Verified `/apple-health-app-sync` still emits canonical, Open Graph, and JSON-LD URLs for `https://web-megabytes-projects.vercel.app/apple-health-app-sync`, so custom-domain directory links should consolidate signals to the primary target instead of creating a competing canonical.
+- `vercel domains inspect healthsync.megabyte.sh` still returns a Vercel CLI `403` for subdomain metadata, despite DNS and HTTP serving correctly. Treat the live HTTP evidence as authoritative and re-check the Vercel dashboard later if project-domain metadata needs cleanup.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
@@ -234,7 +253,7 @@ Actions:
 
 ### 5. BetaList
 
-Status: blocked by domain prerequisite.
+Status: domain prerequisite resolved; submission still requires a logged-in/manual submit flow and launch assets.
 
 Why it matters: relevant for early-access/beta products and can drive discovery links.
 
@@ -242,21 +261,21 @@ Constraint: BetaList says startups need a working website on their own domain an
 
 Actions:
 
-- Set a custom domain before submitting.
+- Use `https://healthsync.megabyte.sh/apple-health-app-sync` for submission if BetaList rejects the canonical `vercel.app` URL.
 - Submit the early-access/TestFlight positioning after the page has screenshots and a clear beta value proposition.
 
 Target URL: custom domain `/apple-health-app-sync`
 
 ### 6. SaaSHub
 
-Status: queued; requires product submission and verification.
+Status: blocked by release/account quality gates; custom-domain prerequisite is now available.
 
 Why it matters: SaaSHub has a submit/verify flow and software-alternative discovery intent: https://www.saashub.com/submit
 
 Actions:
 
-- Submit HealthSync with categories around health data, iOS, self-hosted, and API tooling.
-- Use the resource page as the website URL.
+- Submit HealthSync with categories around health data, iOS, self-hosted, and API tooling only after the product is sufficiently public for SaaSHub verification.
+- Use the custom-domain resource URL if SaaSHub rejects the canonical `vercel.app` URL.
 - Answer Q&A after verification to add unique topical content.
 
 ### 7. Alternative Directories
@@ -378,7 +397,7 @@ Suggested link target:
 
 ## Prerequisites Before Larger Outreach
 
-- Add a custom domain. This is required for BetaList and looks more credible for every directory.
+- Use the live custom domain `https://healthsync.megabyte.sh` for directories that reject free hosting subdomains; keep canonical URLs clean so signals consolidate to `/apple-health-app-sync`.
 - Add screenshots and a 30-60 second demo GIF/video.
 - Confirm the GitHub repo is public, has topics, and has the website URL in repository metadata.
 - Add Search Console and submit `sitemap.xml`.
