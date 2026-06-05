@@ -367,6 +367,8 @@ Live outreach:
 - The PR adds HealthSync to the `Apps` section of a 7k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `A SwiftUI iOS app that syncs selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
 - Opened PR `Add HealthSync app` to `vlondon/awesome-swiftui`: https://github.com/vlondon/awesome-swiftui/pull/55
 - The PR adds HealthSync to the `Apps` section of a 1.9k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `Sync selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
+- Opened PR `Add HealthSync` to `uhub/awesome-swift`: https://github.com/uhub/awesome-swift/pull/27
+- The PR adds HealthSync to an 844-star Swift frameworks, libraries, and software list in the existing source-repository format. The entry links the GitHub source and describes HealthSync as a SwiftUI iOS app for syncing selected Apple Health data from HealthKit to a private backend API. The PR body includes the canonical target `https://healthsync.megabyte.sh/apple-health-app-sync`. The PR is open, mergeable clean, maintainer-editable, and has no comments or reviews.
 - Opened discussion issue `Suggestion: add HealthSync to HealthKit resources` on `eleev/ios-learning-materials`: https://github.com/eleev/ios-learning-materials/issues/91
 - The issue follows the repository's contribution guide, which asks contributors to discuss changes before making them. It proposes HealthSync for the dedicated `HealthKit` resource section of a 3k-star iOS learning list and links both the Apple Health app sync resource page and the source repo. Treat it as outreach until the maintainer invites or accepts a PR.
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
@@ -399,6 +401,7 @@ Follow-up actions:
 - Monitor `onmyway133/awesome-swiftui#36` and respond if the maintainer asks for a different description or link target.
 - Monitor `ygit/swiftui#36` and respond if the maintainer wants a shorter description or source-only link format.
 - Monitor `Juanpe/About-SwiftUI#171` and `vlondon/awesome-swiftui#55`; both are valuable direct app-list backlinks if accepted, but both upstream repositories have older contribution queues.
+- Monitor `uhub/awesome-swift#27`; it is a broad Swift/software list, so maintainer acceptance may depend on whether they want end-user SwiftUI apps alongside frameworks and tools.
 - Monitor `eleev/ios-learning-materials#91`; if the maintainer agrees it fits, submit a one-line PR to `Lists/HealthKit.md`.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Submit `megabyte0x/healthykit` to GitOpen.dev after signing in with GitHub; it is an indexable directory but requires an authenticated session.
