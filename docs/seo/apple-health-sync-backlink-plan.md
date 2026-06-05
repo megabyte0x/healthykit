@@ -367,6 +367,8 @@ Live outreach:
 - The PR adds HealthSync to the `Apps` section of a 7k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `A SwiftUI iOS app that syncs selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
 - Opened PR `Add HealthSync app` to `vlondon/awesome-swiftui`: https://github.com/vlondon/awesome-swiftui/pull/55
 - The PR adds HealthSync to the `Apps` section of a 1.9k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `Sync selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
+- Opened discussion issue `Suggestion: add HealthSync to HealthKit resources` on `eleev/ios-learning-materials`: https://github.com/eleev/ios-learning-materials/issues/91
+- The issue follows the repository's contribution guide, which asks contributors to discuss changes before making them. It proposes HealthSync for the dedicated `HealthKit` resource section of a 3k-star iOS learning list and links both the Apple Health app sync resource page and the source repo. Treat it as outreach until the maintainer invites or accepts a PR.
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
 - The PR adds HealthSync to a HealthKit/CareKit/ResearchKit app list under `Open-source apps` -> `Health`, linking the Apple Health app sync resource page and the GitHub repo. The upstream repository is relevant but stale, so count the open PR as a crawlable contextual backlink and treat a merge as upside rather than a near-term certainty.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
@@ -397,6 +399,7 @@ Follow-up actions:
 - Monitor `onmyway133/awesome-swiftui#36` and respond if the maintainer asks for a different description or link target.
 - Monitor `ygit/swiftui#36` and respond if the maintainer wants a shorter description or source-only link format.
 - Monitor `Juanpe/About-SwiftUI#171` and `vlondon/awesome-swiftui#55`; both are valuable direct app-list backlinks if accepted, but both upstream repositories have older contribution queues.
+- Monitor `eleev/ios-learning-materials#91`; if the maintainer agrees it fits, submit a one-line PR to `Lists/HealthKit.md`.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Submit `megabyte0x/healthykit` to GitOpen.dev after signing in with GitHub; it is an indexable directory but requires an authenticated session.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
