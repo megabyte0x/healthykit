@@ -10,6 +10,7 @@
     "export:requests": "node scripts/export-testflight-requests.mjs --jsonl"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "2.4.0",
     "next": "16.2.7",
     "react": "19.2.7",
