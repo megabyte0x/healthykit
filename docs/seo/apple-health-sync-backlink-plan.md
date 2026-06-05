@@ -307,6 +307,8 @@ Live outreach:
 - The entry links to the Apple Health app sync resource page with the description `Sync selected Apple Health data to a private backend API (iOS).`
 - Opened PR `Add HealthSync project` to Open Source Observer's OSS Directory: https://github.com/opensource-observer/oss-directory/pull/1094
 - The OSS Directory PR adds the HealthSync GitHub artifact plus the Apple Health app sync resource page under `websites`.
+- Opened PR `Add HealthSync by @megabyte0x` to `dkhamsing/open-source-ios-apps`: https://github.com/dkhamsing/open-source-ios-apps/pull/2233
+- The PR adds HealthSync to the active `Open-Source iOS Apps` directory under `health` and `swiftui`, with the GitHub repo as `source` and the Apple Health app sync resource page as `homepage`. The project currently has no public app screenshots checked in, so the PR checklist leaves the screenshot item unchecked.
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
 - The PR adds HealthSync to a HealthKit/CareKit/ResearchKit app list under `Open-source apps` -> `Health`, linking the Apple Health app sync resource page and the GitHub repo. The upstream repository is relevant but stale, so count the open PR as a crawlable contextual backlink and treat a merge as upside rather than a near-term certainty.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
@@ -319,6 +321,7 @@ Live outreach:
 Follow-up actions:
 
 - Monitor open directory PRs and respond to maintainer feedback quickly.
+- Add public app screenshots to improve merge odds for directory submissions that require screenshots.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
 - Initialize the GitHub Wiki in the web UI if another project-owned GitHub documentation backlink is desired.
