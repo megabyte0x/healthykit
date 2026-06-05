@@ -383,6 +383,8 @@ Live outreach:
 - The issue follows the repository's contribution guide, which asks contributors to discuss changes before making them. It proposes HealthSync for the dedicated `HealthKit` resource section of a 3k-star iOS learning list and links both the Apple Health app sync resource page and the source repo. Treat it as outreach until the maintainer invites or accepts a PR.
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
 - The PR adds HealthSync to a HealthKit/CareKit/ResearchKit app list under `Open-source apps` -> `Health`, linking the Apple Health app sync resource page and the GitHub repo. The upstream repository is relevant but stale, so count the open PR as a crawlable contextual backlink and treat a merge as upside rather than a near-term certainty.
+- Opened PR `Add HealthSync to Health` to `mikeroyal/Self-Hosting-Guide`: https://github.com/mikeroyal/Self-Hosting-Guide/pull/365
+- The PR adds HealthSync to the `Health` section of a 20.1k-star self-hosting guide, linking directly to `https://healthsync.megabyte.sh/apple-health-app-sync`. The description is constrained to the real fit: `SwiftUI iOS app with a self-hosted FastAPI backend for syncing selected Apple Health data from HealthKit to a private API.` The PR is open, mergeable clean, maintainer-editable, and has no comments or reviews.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
 - Created public GitHub Gist `Apple Health app sync to a private API`: https://gist.github.com/megabyte0x/5ceb317b2b30eb97ce3cd5c9e8f645e3
 - The Gist explains the HealthKit-to-private-API sync model and links to the primary Apple Health app sync resource page, GitHub source, GitHub Pages docs, and launch release. Verified the public page returns `200` and the raw content contains the target URL.
@@ -403,6 +405,8 @@ Live outreach:
 - Evaluated the HealthSync GitHub Wiki; repository settings report wiki enabled and the current GitHub token has admin permission, but `https://github.com/megabyte0x/healthykit.wiki.git` still returns `Repository not found` and rejected a refreshed initial wiki-page push. Initialize the wiki from GitHub's web UI before using it as a project-owned documentation backlink.
 - Evaluated `paidx.org`; it has a no-account suggestion form for alternatives, but the endpoint was not exposed through the static HTML. Treat it as a manual suggestion candidate only if HealthSync is positioned as a free alternative to a paid Apple Health export/sync app.
 - Evaluated pinning `megabyte0x/healthykit` on the GitHub profile. The profile already has six pinned repositories, so do not replace a pin without explicit approval.
+- Evaluated `jobbole/awesome-ios-cn`; it has strong historical authority, but it is a Chinese iOS library/resource catalog without a clean complete-app or HealthKit product slot for HealthSync, so do not submit there.
+- Evaluated `pluja/awesome-privacy`; it is high-authority and has a relevant Fitness and Health section, but its scope is free/open-source privacy-respecting alternatives. HealthSync currently lacks license metadata, so do not submit there until the license is chosen.
 
 Follow-up actions:
 
@@ -419,6 +423,7 @@ Follow-up actions:
 - Monitor `appscorecards/awesome-mobile-apps#1`; it is not high authority yet, but it provides a structured scorecard backlink if accepted.
 - Monitor `Tim9Liu9/TimLiu-iOS#147`; it is a high-authority broad iOS resource backlink if accepted, but the upstream review queue appears slow.
 - Monitor `eleev/ios-learning-materials#91`; if the maintainer agrees it fits, submit a one-line PR to `Lists/HealthKit.md`.
+- Monitor `mikeroyal/Self-Hosting-Guide#365`; it is the highest-authority self-hosting-health backlink currently open, and maintainer review may focus on whether an iOS app plus self-hosted backend fits the guide's server-oriented scope.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Submit `megabyte0x/healthykit` to GitOpen.dev after signing in with GitHub; it is an indexable directory but requires an authenticated session.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
