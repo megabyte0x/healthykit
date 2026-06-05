@@ -231,6 +231,18 @@ Actions completed:
 - Verified the live sitemap now lists `https://healthsync.megabyte.sh` and `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - `vercel domains inspect healthsync.megabyte.sh` still returns a Vercel CLI `403` for subdomain metadata, despite DNS and HTTP serving correctly. Treat the live HTTP evidence as authoritative and re-check the Vercel dashboard later if project-domain metadata needs cleanup.
 
+### 2h. Apple Health Sync Alternatives Page
+
+Status: implemented locally on 2026-06-05; deploy through the normal main-branch Vercel flow.
+
+Why it matters: current search results show competitor and alternative-intent pages for the existing App Store `HealthSync`, appyhapps `Health Sync`, SaaSHub `Health Sync alternatives`, Apple Health alternatives, and tools such as Health Auto Export. A focused comparison page gives HealthSync a crawlable target for `Apple Health sync alternatives`, clarifies the shared-name problem, and internally links back to the primary Apple Health app sync guide.
+
+Actions:
+
+- Added `/apple-health-sync-alternatives` with canonical metadata, TechArticle/ItemList schema, and comparison copy for HealthSync, Health Auto Export, Health Sync, and one-off HealthKit export scripts.
+- Linked the alternatives page from `/apple-health-app-sync`.
+- Added `/apple-health-sync-alternatives` to the Next.js sitemap.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
@@ -277,12 +289,13 @@ Target URL: custom domain `/apple-health-app-sync`
 
 ### 6. SaaSHub
 
-Status: blocked by release/account quality gates; custom-domain prerequisite is now available.
+Status: blocked by release/account quality gates and current fetchability; custom-domain prerequisite is now available.
 
 Why it matters: SaaSHub has a submit/verify flow and software-alternative discovery intent: https://www.saashub.com/submit
 
 Actions:
 
+- Treat `https://www.saashub.com/health-sync-alternatives` as the most relevant future suggestion target because it already ranks for `Health Sync alternatives` and asks users to suggest missing competitors.
 - Submit HealthSync with categories around health data, iOS, self-hosted, and API tooling only after the product is sufficiently public for SaaSHub verification.
 - Use the custom-domain resource URL if SaaSHub rejects the canonical `vercel.app` URL.
 - Answer Q&A after verification to add unique topical content.
@@ -407,6 +420,10 @@ Live outreach:
 - Evaluated pinning `megabyte0x/healthykit` on the GitHub profile. The profile already has six pinned repositories, so do not replace a pin without explicit approval.
 - Evaluated `jobbole/awesome-ios-cn`; it has strong historical authority, but it is a Chinese iOS library/resource catalog without a clean complete-app or HealthKit product slot for HealthSync, so do not submit there.
 - Evaluated `pluja/awesome-privacy`; it is high-authority and has a relevant Fitness and Health section, but its scope is free/open-source privacy-respecting alternatives. HealthSync currently lacks license metadata, so do not submit there until the license is chosen.
+- Evaluated `matteocrippa/awesome-swift`; it is high-authority and active, but its `contents.json` is organized around Swift libraries/resources rather than complete end-user apps. Do not force HealthSync into this list unless the repo grows a reusable Swift package or library surface.
+- Evaluated `kakoni/awesome-healthcare`; it is relevant and active, but contribution rules require acknowledged open-source licensing or an explicit `(Commercial Software)` note plus reasonable recognition/adoption and production/GA quality. HealthSync currently has no license metadata and remains TestFlight-stage, so do not submit yet.
+- Evaluated OSSEAN; it is crawlable and relevant for open-source startup discovery, but no trustworthy PR or submit route was exposed in the page or GitHub search, so keep it as research-only until a submission path appears.
+- Evaluated FossFinder/OpenSourceHunt, OpenSRC.ME, OSSAlternatives, and LibHunt. FossFinder/OpenSourceHunt did not expose usable submission markup, OpenSRC.ME failed TLS from this machine, OSSAlternatives failed DNS resolution, and LibHunt returned a Cloudflare challenge; treat them as manual or retry-later candidates only.
 
 Follow-up actions:
 

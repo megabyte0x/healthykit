@@ -1021,6 +1021,11 @@ select:hover {
   text-underline-offset: 4px;
 }
 
+.resource-copy strong {
+  color: #191c20;
+  font-weight: 780;
+}
+
 .resource-support {
   color: #4d535c;
   font-size: clamp(1.03rem, 1.22vw, 1.22rem);
@@ -1063,6 +1068,41 @@ select:hover {
 
 .resource-list.accent li::before {
   background: var(--red);
+}
+
+.comparison-table {
+  border-top: 1px solid var(--border);
+  display: grid;
+  margin-top: clamp(32px, 4.5vw, 54px);
+}
+
+.comparison-row {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(112px, 0.55fr) minmax(190px, 1fr) minmax(120px, 0.58fr) minmax(150px, 0.7fr) minmax(210px, 1fr);
+  padding: 22px 0;
+}
+
+.comparison-head {
+  color: var(--faint);
+  font-size: 0.78rem;
+  font-weight: 840;
+  letter-spacing: 0.08em;
+  padding: 15px 0;
+  text-transform: uppercase;
+}
+
+.comparison-row div {
+  color: #3f454d;
+  font-size: clamp(0.95rem, 1vw, 1.04rem);
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.comparison-row strong {
+  color: #14171a;
+  font-weight: 800;
 }
 
 .resource-cta {
@@ -1288,6 +1328,34 @@ select:hover {
   .resource-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .comparison-table {
+    gap: 0;
+  }
+
+  .comparison-head {
+    display: none;
+  }
+
+  .comparison-row {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 24px 0;
+  }
+
+  .comparison-row div {
+    display: grid;
+    gap: 5px;
+  }
+
+  .comparison-row div::before {
+    color: var(--faint);
+    content: attr(data-label);
+    font-size: 0.76rem;
+    font-weight: 840;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 }
 

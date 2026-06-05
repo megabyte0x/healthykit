@@ -81,6 +81,7 @@ export default function AppleHealthAppSyncPage() {
           <a href="/">Request access</a>
           <a href="#how-it-works">How it works</a>
           <a href="#use-cases">Use cases</a>
+          <a href="/apple-health-sync-alternatives">Alternatives</a>
         </nav>
       </header>
 
@@ -200,6 +201,29 @@ export default function AppleHealthAppSyncPage() {
             endpoint.
           </p>
           <a className="resource-button" href="/#request-access">Request access</a>
+        </div>
+      </section>
+
+      <section className="resource-band muted" aria-labelledby="alternatives-title">
+        <div className="resource-shell resource-columns">
+          <div>
+            <p className="resource-kicker">Alternatives</p>
+            <h2 id="alternatives-title">Compare Apple Health sync options.</h2>
+          </div>
+          <div className="resource-copy">
+            <p>
+              If you are comparing HealthSync with Health Auto Export, Health Sync, or one-off
+              HealthKit export scripts, use the comparison page to decide whether you need a private
+              API sync workflow or a simpler export tool.
+            </p>
+            <p>
+              Read the{" "}
+              <a href="/apple-health-sync-alternatives">
+                Apple Health sync alternatives comparison
+              </a>
+              .
+            </p>
+          </div>
         </div>
       </section>
     </main>

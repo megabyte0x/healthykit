@@ -14,6 +14,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.9
+    },
+    {
+      url: absoluteUrl("/apple-health-sync-alternatives"),
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.72
     }
   ];
 }
