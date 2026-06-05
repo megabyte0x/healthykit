@@ -2,9 +2,9 @@
 
 Date: 2026-06-05
 
-Target site: https://healthsync.megabyte.sh
+Target site: https://healthysync.megabyte.sh
 
-Primary link target: https://healthsync.megabyte.sh/apple-health-app-sync
+Primary link target: https://healthysync.megabyte.sh/apple-health-app-sync
 
 Primary query family:
 
@@ -211,15 +211,15 @@ Actions completed:
 
 ### 2g. Custom-Domain HealthSync URL
 
-Status: implemented and live on 2026-06-05.
+Status: migrated to `healthysync.megabyte.sh` and live on 2026-06-05.
 
-Why it matters: `healthsync.megabyte.sh` gives outreach and directory submissions a project-specific custom-domain URL instead of a `vercel.app` hosting subdomain. That removes a common product-directory blocker and makes the link target more credible for search results and directories.
+Why it matters: `healthysync.megabyte.sh` gives outreach and directory submissions a project-specific custom-domain URL instead of a `vercel.app` hosting subdomain. That removes a common product-directory blocker and makes the link target more credible for search results and directories.
 
 Live URLs:
 
-- https://healthsync.megabyte.sh/
-- https://healthsync.megabyte.sh/apple-health-app-sync
-- https://healthsync.megabyte.sh/sitemap.xml
+- https://healthysync.megabyte.sh/
+- https://healthysync.megabyte.sh/apple-health-app-sync
+- https://healthysync.megabyte.sh/sitemap.xml
 
 Actions completed:
 
@@ -230,6 +230,10 @@ Actions completed:
 - Verified the live `/apple-health-app-sync` page returns `200` with `x-robots-tag: index, follow`, and now emits canonical, Open Graph, Twitter image, and TechArticle schema URLs on `https://healthsync.megabyte.sh`.
 - Verified the live sitemap now lists `https://healthsync.megabyte.sh` and `https://healthsync.megabyte.sh/apple-health-app-sync`.
 - `vercel domains inspect healthsync.megabyte.sh` still returns a Vercel CLI `403` for subdomain metadata, despite DNS and HTTP serving correctly. Treat the live HTTP evidence as authoritative and re-check the Vercel dashboard later if project-domain metadata needs cleanup.
+- Added `healthysync.megabyte.sh` to the linked Vercel project `web`.
+- Switched the active app fallback URL, repository README links, GitHub Pages documentation links, `NEXT_PUBLIC_SITE_URL`, and active SEO target to `https://healthysync.megabyte.sh`.
+- Deployed production Vercel deployment `dpl_3ndjq94yzhvMnYLYDukoa2jhGpzC`, which serves the new host.
+- Verified `/`, `/apple-health-app-sync`, `/sitemap.xml`, and `/robots.txt` on `https://healthysync.megabyte.sh` return `200` with canonical, Open Graph, sitemap, and robots URLs on the new host.
 
 ### 2h. Apple Health Sync Alternatives Page
 
@@ -284,7 +288,7 @@ Constraint: BetaList says startups need a working website on their own domain an
 
 Actions:
 
-- Use `https://healthsync.megabyte.sh/apple-health-app-sync` for submission if BetaList rejects the canonical `vercel.app` URL.
+- Use `https://healthysync.megabyte.sh/apple-health-app-sync` for submission if BetaList rejects the canonical `vercel.app` URL.
 - Submit the early-access/TestFlight positioning after the page has screenshots and a clear beta value proposition.
 
 Target URL: custom domain `/apple-health-app-sync`
@@ -469,11 +473,11 @@ Founder/community note:
 
 Suggested link target:
 
-> https://healthsync.megabyte.sh/apple-health-app-sync
+> https://healthysync.megabyte.sh/apple-health-app-sync
 
 ## Prerequisites Before Larger Outreach
 
-- Use the live custom domain `https://healthsync.megabyte.sh` for new directories and outreach; keep canonical URLs clean so signals consolidate to `/apple-health-app-sync`.
+- Use the live custom domain `https://healthysync.megabyte.sh` for new directories and outreach; keep canonical URLs clean so signals consolidate to `/apple-health-app-sync`.
 - Add screenshots and a 30-60 second demo GIF/video.
 - Confirm the GitHub repo is public, has topics, and has the website URL in repository metadata.
 - Add Search Console and submit `sitemap.xml`.

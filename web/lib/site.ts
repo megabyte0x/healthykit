@@ -1,5 +1,5 @@
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://healthsync.megabyte.sh"
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://healthysync.megabyte.sh"
 ).replace(/\/+$/, "");
 
 export function absoluteUrl(path = "/") {
