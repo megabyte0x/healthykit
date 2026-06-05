@@ -186,6 +186,22 @@ Actions completed:
 - Deployed Vercel production deployment `dpl_Gna4J134iA7aLWYc5szGBdXc8fuf`, aliased to `https://www.megabyte.sh`.
 - Verified live fetches: the article returns `200` and contains the HealthSync target URL; sitemap and feed contain the article URL; `llms.txt` contains both the article URL and the target backlink.
 
+### 2f. GitHub Gist Technical Reference
+
+Status: implemented and live on 2026-06-05.
+
+Why it matters: a public Gist gives the project a compact, crawlable technical reference on another GitHub surface. It is useful for outreach where the full product page is too heavy, and it links naturally to the primary Apple Health app sync resource, source repo, GitHub Pages docs, and launch release.
+
+Live URL:
+
+- https://gist.github.com/megabyte0x/5ceb317b2b30eb97ce3cd5c9e8f645e3
+
+Actions completed:
+
+- Created `Apple Health app sync to a private API` as a public GitHub Gist.
+- Linked naturally to `https://web-megabytes-projects.vercel.app/apple-health-app-sync`, `https://github.com/megabyte0x/healthykit`, `https://megabyte0x.github.io/healthykit/apple-health-app-sync/`, and the GitHub launch release.
+- Verified the Gist page returns `200` and the raw Gist content contains the target URL and related project links.
+
 ### 3. Product Hunt
 
 Status: queued; requires logged-in maker account and launch assets.
@@ -313,7 +329,11 @@ Live outreach:
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
 - The PR adds HealthSync to a HealthKit/CareKit/ResearchKit app list under `Open-source apps` -> `Health`, linking the Apple Health app sync resource page and the GitHub repo. The upstream repository is relevant but stale, so count the open PR as a crawlable contextual backlink and treat a merge as upside rather than a near-term certainty.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
+- Created public GitHub Gist `Apple Health app sync to a private API`: https://gist.github.com/megabyte0x/5ceb317b2b30eb97ce3cd5c9e8f645e3
+- The Gist explains the HealthKit-to-private-API sync model and links to the primary Apple Health app sync resource page, GitHub source, GitHub Pages docs, and launch release. Verified the public page returns `200` and the raw content contains the target URL.
 - Evaluated `Dieterbe/awesome-health-fitness-oss`; it is active and relevant, but it is explicitly for Free/Open Source projects. HealthSync currently has no detected license file or GitHub license metadata, so do not submit there until the repo license is chosen.
+- Evaluated `vsouza/awesome-ios`; it is active and high-authority, but contribution rules require 100+ GitHub stars, more than one contributor, an OSI-approved license, and Swift Package Manager support. HealthSync does not qualify yet, so do not submit until those hard requirements are met.
+- Evaluated `openappssh/openapps`; it has a relevant `fitness` category and a self-hosted project comparison format, but guidelines require open-source projects with clear licensing. HealthSync currently lacks license metadata, so do not submit until the license is chosen.
 - Evaluated `OpenAltFinder`; the submission form is relevant but protected by Cloudflare Turnstile, so it needs a manual browser submission with a valid captcha token.
 - Evaluated the HealthSync GitHub Wiki; repository settings report wiki enabled, but `https://github.com/megabyte0x/healthykit.wiki.git` returns `Repository not found` and rejected an initial wiki-page push. Initialize the wiki from GitHub's web UI before using it as a project-owned documentation backlink.
 - Evaluated `paidx.org`; it has a no-account suggestion form for alternatives, but the endpoint was not exposed through the static HTML. Treat it as a manual suggestion candidate only if HealthSync is positioned as a free alternative to a paid Apple Health export/sync app.
@@ -323,6 +343,7 @@ Follow-up actions:
 
 - Monitor open directory PRs and respond to maintainer feedback quickly.
 - Add more public app screenshots if maintainers ask for additional screens or App Store-style image dimensions.
+- Use the public GitHub Gist as a compact technical reference in future outreach where a long product page is too heavy.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
 - Initialize the GitHub Wiki in the web UI if another project-owned GitHub documentation backlink is desired.
