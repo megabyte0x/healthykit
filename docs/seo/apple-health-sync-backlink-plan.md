@@ -70,7 +70,8 @@ Actions:
 
 - Keep the README links to the homepage and `/apple-health-app-sync`.
 - Repository metadata now points the homepage to `/apple-health-app-sync`.
-- Repository topics are now set to `apple-health`, `applehealth`, `healthkit`, `ios`, `swiftui`, `self-hosted`, `health-data`, `health-tracking`, `fastapi`.
+- Repository topics are now set to `apple-health`, `applehealth`, `healthkit`, `ios`, `swiftui`, `self-hosted`, `health-data`, `health-tracking`, `fastapi`, `apple-health-sync`, `healthkit-api`, `apple-healthkit`, `health-api`, `personal-health-data`, and `ios-health`.
+- Added exact-query topic coverage on 2026-06-05. The topic pages for `apple-health-sync`, `healthkit-api`, `apple-healthkit`, and `personal-health-data` return `200`, and the repo homepage metadata still points to the primary Apple Health app sync resource page.
 - Pin or feature the repo from the user profile if appropriate.
 
 Target URL: `/apple-health-app-sync`
