@@ -363,6 +363,10 @@ Live outreach:
 - The PR adds HealthSync to the `Open source apps` -> `iOS` section of a 1k-star SwiftUI resource list. The entry links the GitHub source with the description `SwiftUI app that syncs selected Apple Health data from HealthKit to a private backend API.` The source repository homepage and README link onward to the primary Apple Health app sync resource page. The PR is open, ready for review, and mergeable; GitHub reports no checks on the branch.
 - Opened PR `Add HealthSync SwiftUI app` to `ygit/swiftui`: https://github.com/ygit/swiftui/pull/36
 - The PR adds HealthSync to an active 1.2k-star SwiftUI resource list as a SwiftUI app entry. The entry links the GitHub source and includes a direct contextual backlink to the primary Apple Health app sync resource page with the anchor `syncing Apple Health data to a private backend API`. The PR is open, maintainer-editable, and mergeable; GitHub reports no checks on the branch.
+- Opened PR `Add HealthSync app` to `Juanpe/About-SwiftUI`: https://github.com/Juanpe/About-SwiftUI/pull/171
+- The PR adds HealthSync to the `Apps` section of a 7k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `A SwiftUI iOS app that syncs selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
+- Opened PR `Add HealthSync app` to `vlondon/awesome-swiftui`: https://github.com/vlondon/awesome-swiftui/pull/55
+- The PR adds HealthSync to the `Apps` section of a 1.9k-star SwiftUI resource list. The entry links directly to `https://healthsync.megabyte.sh/apple-health-app-sync` with the description `Sync selected Apple Health data from HealthKit to a private backend API.` The PR is open and mergeable; GitHub reports no comments or reviews.
 - Opened PR `Add HealthSync` to `Mylittleswift/ios-health-fitness-apps`: https://github.com/Mylittleswift/ios-health-fitness-apps/pull/1
 - The PR adds HealthSync to a HealthKit/CareKit/ResearchKit app list under `Open-source apps` -> `Health`, linking the Apple Health app sync resource page and the GitHub repo. The upstream repository is relevant but stale, so count the open PR as a crawlable contextual backlink and treat a merge as upside rather than a near-term certainty.
 - Submitted `megabyte0x/healthykit` to GitDB; GitDB accepted and indexed the API record at `https://p.gitdb.net/api/v1/megabyte0x/healthykit`, but the public HTML page currently sends `x-robots-tag: noindex, nofollow`, so treat it as discovery/indexing value rather than an SEO backlink.
@@ -392,6 +396,7 @@ Follow-up actions:
 - Use the public GitHub Gist as a compact technical reference in future outreach where a long product page is too heavy.
 - Monitor `onmyway133/awesome-swiftui#36` and respond if the maintainer asks for a different description or link target.
 - Monitor `ygit/swiftui#36` and respond if the maintainer wants a shorter description or source-only link format.
+- Monitor `Juanpe/About-SwiftUI#171` and `vlondon/awesome-swiftui#55`; both are valuable direct app-list backlinks if accepted, but both upstream repositories have older contribution queues.
 - Decide the HealthSync repository license before submitting to Free/Open Source lists that require license clarity.
 - Submit `megabyte0x/healthykit` to GitOpen.dev after signing in with GitHub; it is an indexable directory but requires an authenticated session.
 - Manually submit to OpenAltFinder if the project is positioned as an alternative to Health Auto Export, Health Webhook, or similar tools.
