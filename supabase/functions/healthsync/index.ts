@@ -323,7 +323,15 @@ async function agentHealthData(req: Request, url: URL): Promise<Response> {
   const workoutsPage = await listRows("health_workouts", auth.workspaceId, url, range);
   const syncsPage = await listRows("sync_batches", auth.workspaceId, url, range);
   const metrics = await enrichRows(metricsPage.items, "health_metrics");
+  const allMetrics = await enrichRows(
+    await listAllRows("health_metrics", auth.workspaceId, url, range),
+    "health_metrics",
+  );
   const workouts = await enrichRows(workoutsPage.items, "health_workouts");
+  const allWorkouts = await enrichRows(
+    await listAllRows("health_workouts", auth.workspaceId, url, range),
+    "health_workouts",
+  );
 
   return json({
     agent_schema_version: 2,
@@ -338,9 +346,28 @@ async function agentHealthData(req: Request, url: URL): Promise<Response> {
     metrics,
     workouts,
     syncs: syncsPage.items.map(syncRowToAgent),
-    metric_daily_summaries: summarizeMetrics(metrics),
-    workout_daily_summaries: summarizeWorkouts(workouts),
+    metric_daily_summaries: summarizeMetrics(allMetrics),
+    workout_daily_summaries: summarizeWorkouts(allWorkouts),
   });
+}
+
+async function listAllRows(
+  table: string,
+  workspaceId: string,
+  url: URL,
+  range: RangeInfo,
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  let offset = 0;
+
+  while (true) {
+    const result = await listRows(table, workspaceId, url, range, { limit: 500, offset });
+    rows.push(...result.items);
+    if (!result.page.has_more) {
+      return rows;
+    }
+    offset += result.page.limit;
+  }
 }
 
 async function agentList(req: Request, url: URL, table: string): Promise<Response> {
@@ -355,9 +382,10 @@ async function listRows(
   workspaceId: string,
   url: URL,
   range: RangeInfo,
+  pagination?: { limit: number; offset: number },
 ): Promise<{ items: Record<string, unknown>[]; page: PageInfo }> {
-  const limit = boundedInt(url.searchParams.get("limit"), 100, 1, 500);
-  const offset = boundedInt(url.searchParams.get("offset"), 0, 0, 100000);
+  const limit = pagination?.limit ?? boundedInt(url.searchParams.get("limit"), 100, 1, 500);
+  const offset = pagination?.offset ?? boundedInt(url.searchParams.get("offset"), 0, 0, 100000);
   const orderColumn = table === "sync_batches" ? "received_at" : "start_at";
   let query = db
     .from(table)

@@ -321,6 +321,29 @@ def list_metrics(
     )
 
 
+def list_metric_summary_items(
+    db: Session,
+    *,
+    workspace_id: str,
+    metric_type: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[HealthMetricOut]:
+    stmt: Select[tuple[HealthMetricRecord]] = select(HealthMetricRecord).where(
+        HealthMetricRecord.workspace_id == workspace_id
+    )
+    if metric_type:
+        stmt = stmt.where(HealthMetricRecord.type == metric_type)
+    if start_at:
+        stmt = stmt.where(HealthMetricRecord.start_at >= start_at)
+    if end_at:
+        stmt = stmt.where(HealthMetricRecord.end_at <= end_at)
+
+    records = db.scalars(stmt.order_by(desc(HealthMetricRecord.start_at))).all()
+    timezone_lookup = load_batch_timezones(db, records)
+    return [metric_record_to_schema(record, timezone_lookup) for record in records]
+
+
 def list_workouts(
     db: Session,
     *,
@@ -352,6 +375,26 @@ def list_workouts(
         items=[workout_record_to_schema(record, timezone_lookup) for record in page_records],
         page=PageInfo(limit=limit, offset=offset, has_more=has_more),
     )
+
+
+def list_workout_summary_items(
+    db: Session,
+    *,
+    workspace_id: str,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[HealthWorkoutOut]:
+    stmt: Select[tuple[HealthWorkoutRecord]] = select(HealthWorkoutRecord).where(
+        HealthWorkoutRecord.workspace_id == workspace_id
+    )
+    if start_at:
+        stmt = stmt.where(HealthWorkoutRecord.start_at >= start_at)
+    if end_at:
+        stmt = stmt.where(HealthWorkoutRecord.end_at <= end_at)
+
+    records = db.scalars(stmt.order_by(desc(HealthWorkoutRecord.start_at))).all()
+    timezone_lookup = load_batch_timezones(db, records)
+    return [workout_record_to_schema(record, timezone_lookup) for record in records]
 
 
 def list_sync_batches(

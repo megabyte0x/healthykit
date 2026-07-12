@@ -461,3 +461,64 @@ def test_agent_health_data_reports_has_more_when_result_is_limited(tmp_path: Pat
 
     assert response.status_code == 200
     assert response.json()["page"] == {"limit": 1, "offset": 0, "has_more": True}
+
+
+def test_agent_daily_summary_uses_all_matching_samples_not_only_current_page(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    payload = sample_payload()
+    payload["workouts"] = [
+        {
+            **payload["workouts"][0],
+            "id": f"healthkit:workout-{index}",
+            "start_at": f"2026-05-31T0{index}:10:00.000Z",
+            "end_at": f"2026-05-31T0{index}:40:00.000Z",
+        }
+        for index in range(1, 4)
+    ]
+    payload["metrics"] = [
+        {
+            **payload["metrics"][0],
+            "id": f"healthkit:metric-{index}",
+            "value": value,
+            "start_at": f"2026-05-31T0{index}:00:00.000Z",
+            "end_at": f"2026-05-31T0{index}:05:00.000Z",
+        }
+        for index, value in enumerate((10, 20, 30), start=1)
+    ]
+    client.post("/api/apple-health/sync", headers=ingest_headers, json=payload)
+
+    response = client.get(
+        "/api/agent/health-data?type=stepCount&limit=2",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["metrics"]) == 2
+    assert body["page"]["has_more"] is True
+    assert body["metric_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "type": "stepCount",
+            "unit": "count",
+            "sample_count": 3,
+            "total_value": 60.0,
+            "average_value": 20.0,
+            "minimum_value": 10.0,
+            "maximum_value": 30.0,
+        }
+    ]
+    assert body["workout_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "activity_type": "running",
+            "workout_count": 3,
+            "duration_minutes": 90.0,
+            "distance_km": 15.0,
+            "total_energy_kcal": 750.0,
+            "active_energy_kcal": 690.0,
+        }
+    ]

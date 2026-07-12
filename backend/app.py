@@ -13,8 +13,10 @@ from .config import Settings
 from .database import create_engine_for_url, create_session_factory
 from .repository import (
     get_agent_catalog,
+    list_metric_summary_items,
     list_metrics,
     list_sync_batches,
+    list_workout_summary_items,
     list_workouts,
     persist_sync_payload,
     provision_hosted_workspace,
@@ -258,6 +260,19 @@ def create_app(
             limit=limit,
             offset=offset,
         )
+        metric_summary_items = list_metric_summary_items(
+            db,
+            workspace_id=auth.workspace_id,
+            metric_type=metric_type,
+            start_at=from_at,
+            end_at=to,
+        )
+        workout_summary_items = list_workout_summary_items(
+            db,
+            workspace_id=auth.workspace_id,
+            start_at=from_at,
+            end_at=to,
+        )
         return AgentHealthDataResponse(
             agent_schema_version=2,
             workspace_id=auth.workspace_id,
@@ -267,8 +282,8 @@ def create_app(
             metrics=metrics.items,
             workouts=workouts.items,
             syncs=syncs.items,
-            metric_daily_summaries=summarize_metric_items(metrics.items),
-            workout_daily_summaries=summarize_workout_items(workouts.items),
+            metric_daily_summaries=summarize_metric_items(metric_summary_items),
+            workout_daily_summaries=summarize_workout_items(workout_summary_items),
         )
 
     return app
