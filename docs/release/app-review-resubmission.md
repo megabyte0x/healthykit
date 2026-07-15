@@ -45,7 +45,7 @@ Run these checks using the archived Release build on a physical iPhone:
 Completed locally on July 15, 2026:
 
 - [x] Build number is `1.0 (7)` in Debug and Release configurations.
-- [x] HealthKit authorization is read-only: the app requests an empty share set, includes `NSHealthShareUsageDescription`, and omits the write-only `NSHealthUpdateUsageDescription` key.
+- [x] HealthKit authorization is read-only: the app requests an empty share set. The bundle includes both HealthKit purpose keys because App Store Connect requires them when the HealthKit entitlement is present; the update-purpose text explicitly states that HealthSync never writes or modifies Health data.
 - [x] Clean-install Release launch shows the private hosted storage disclosure and neutral **Continue** action.
 - [x] Tapping **Continue** on a clean simulator provisions hosted storage before presenting the native Health permission sheet.
 - [x] Swift test suite: 65 passed, 0 failed.

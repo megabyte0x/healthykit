@@ -20,6 +20,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>This app reads selected Apple Health data to sync it to your private health dashboard.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>HealthSync uses read-only HealthKit access and never writes or modifies your Apple Health data.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app connects to your private backend on the local network when you configure a local testing URL.</string>
 	<key>NSAppTransportSecurity</key>
