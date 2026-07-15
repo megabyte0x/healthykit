@@ -3,6 +3,12 @@ import HealthKit
 @testable import HealthSync
 
 final class APIClientTests: XCTestCase {
+    func testBackendURLValidationRejectsMissingURLBeforeSyncWorkBegins() {
+        XCTAssertThrowsError(try APIClient.validatedRootURL(from: "  ")) { error in
+            XCTAssertEqual(error as? APIClientError, .missingBackendURL)
+        }
+    }
+
     func testRetryClassificationMatchesBackendContract() {
         XCTAssertEqual(APIClient.classify(statusCode: 200), .accepted)
         XCTAssertEqual(APIClient.classify(statusCode: 201), .accepted)
@@ -111,6 +117,11 @@ final class APIClientTests: XCTestCase {
 }
 
 final class AppSettingsHostedEndpointTests: XCTestCase {
+    func testCleanInstallDefaultsToHostedStorageSoManualSyncHasASetupPath() {
+        XCTAssertEqual(AppSettings.default.storageMode, .hostedHealthSync)
+        XCTAssertEqual(AppSettings.default.effectiveBackendURL, AppSettings.hostedBackendURL)
+    }
+
     func testDefaultSettingsSelectEverySupportedHealthDataType() {
         XCTAssertEqual(AppSettings.default.selectedTypes, Set(HealthDataType.allCases))
     }
@@ -201,6 +212,50 @@ final class AppSettingsHostedEndpointTests: XCTestCase {
     }
 }
 
+final class UploadDestinationPreparationTests: XCTestCase {
+    func testHostedStorageWithoutCredentialsRequiresAutomaticProvisioning() {
+        XCTAssertEqual(
+            UploadDestinationPreparation.resolve(
+                storageMode: .hostedHealthSync,
+                hasAgentEndpoint: false,
+                hasAgentToken: false,
+                hasIngestToken: false
+            ),
+            .provisionHostedStorage
+        )
+    }
+
+    func testCompleteHostedStorageAndCustomBackendDoNotAutoProvision() {
+        XCTAssertEqual(
+            UploadDestinationPreparation.resolve(
+                storageMode: .hostedHealthSync,
+                hasAgentEndpoint: true,
+                hasAgentToken: true,
+                hasIngestToken: true
+            ),
+            .ready
+        )
+        XCTAssertEqual(
+            UploadDestinationPreparation.resolve(
+                storageMode: .customBackend,
+                hasAgentEndpoint: false,
+                hasAgentToken: false,
+                hasIngestToken: false
+            ),
+            .ready
+        )
+    }
+}
+
+final class OnboardingStorageDisclosureTests: XCTestCase {
+    func testDisclosureExplainsAutomaticHostedStorageBeforeHealthAccess() {
+        XCTAssertEqual(
+            OnboardingStorageDisclosure.message,
+            "Continue creates private hosted storage, then requests Health access. You can switch to your own backend later."
+        )
+    }
+}
+
 final class HealthKitTypeRegistryTests: XCTestCase {
     func testRegistryIncludesRepresentativeHealthKitQuantityCategoryAndWorkoutTypes() {
         XCTAssertNotNil(HealthKitTypeRegistry.objectType(for: .bloodGlucose))
@@ -219,10 +274,10 @@ final class HealthKitTypeRegistryTests: XCTestCase {
 }
 
 final class HealthKitManagerErrorTests: XCTestCase {
-    func testAuthorizationNotDeterminedMessageTellsUserToConnectAppleHealth() {
+    func testAuthorizationNotDeterminedMessageUsesNeutralPermissionAction() {
         XCTAssertEqual(
             HealthKitManagerError.authorizationNotDetermined.errorDescription,
-            "Apple Health permissions are not set up yet. Tap Connect Apple Health and allow the requested read permissions."
+            "Health permissions are not set up yet. Tap Continue and review the requested read permissions."
         )
     }
 }
@@ -236,7 +291,7 @@ final class HealthPermissionPromptPresentationTests: XCTestCase {
         )
 
         XCTAssertTrue(presentation.shouldShowConnectAction)
-        XCTAssertEqual(presentation.connectButtonTitle, "Connect Apple Health")
+        XCTAssertEqual(presentation.connectButtonTitle, "Continue")
         XCTAssertFalse(presentation.isConnectButtonDisabled)
     }
 
@@ -258,6 +313,20 @@ final class HealthPermissionPromptPresentationTests: XCTestCase {
         )
 
         XCTAssertFalse(presentation.shouldShowConnectAction)
+    }
+}
+
+final class HealthActionFeedbackTests: XCTestCase {
+    func testPermissionSuccessMessageAcknowledgesCompletion() {
+        XCTAssertEqual(
+            HealthActionFeedback.permissionRequested.message,
+            "Health access request completed. You can change access at any time in iPhone Settings."
+        )
+    }
+
+    func testEmptyAndSuccessfulSyncMessagesAreVisibleOutcomes() {
+        XCTAssertEqual(HealthActionFeedback.noSamples.message, "No health samples were found for the last 24 hours.")
+        XCTAssertEqual(HealthActionFeedback.syncCompleted.message, "The last 24 hours were synced successfully.")
     }
 }
 
@@ -330,7 +399,7 @@ final class HealthPermissionSettingsPresentationTests: XCTestCase {
             isBusy: false
         )
 
-        XCTAssertEqual(presentation.approvalButtonTitle, "Review Apple Health Access")
+        XCTAssertEqual(presentation.approvalButtonTitle, "Continue")
         XCTAssertEqual(presentation.approvalButtonSystemImage, "heart.text.square.fill")
         XCTAssertFalse(presentation.isApprovalButtonDisabled)
         XCTAssertFalse(presentation.showsSettingsButton)
@@ -342,7 +411,7 @@ final class HealthPermissionSettingsPresentationTests: XCTestCase {
             isBusy: false
         )
 
-        XCTAssertEqual(presentation.approvalButtonTitle, "Review Apple Health Access")
+        XCTAssertEqual(presentation.approvalButtonTitle, "Continue")
         XCTAssertTrue(presentation.showsSettingsButton)
         XCTAssertEqual(presentation.settingsButtonTitle, "Open iPhone Settings")
     }

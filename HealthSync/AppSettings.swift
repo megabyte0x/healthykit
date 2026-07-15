@@ -71,7 +71,7 @@ struct AppSettings: Codable, Equatable {
         selectedTypes: Set(HealthDataType.allCases),
         syncFrequency: .manualOnly,
         hasRequestedHealthPermissions: false,
-        storageMode: .customBackend,
+        storageMode: .hostedHealthSync,
         hostedWorkspaceID: nil,
         hostedAgentEndpoint: nil
     )

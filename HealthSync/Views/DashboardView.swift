@@ -11,7 +11,7 @@ struct HealthPermissionPromptPresentation: Equatable {
     }
 
     var connectButtonTitle: String {
-        "Connect Apple Health"
+        "Continue"
     }
 
     var isConnectButtonDisabled: Bool {
@@ -45,7 +45,7 @@ struct DashboardView: View {
                                 Text("HealthSync")
                                     .font(.largeTitle.weight(.bold))
                                     .foregroundStyle(.primary)
-                                Text("Private Apple Health sync")
+                                Text("Private health data sync")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -83,6 +83,10 @@ struct DashboardView: View {
                                     .stroke(HealthSyncTheme.warningOrange.opacity(0.3), lineWidth: 1.5)
                             )
                             .transition(.opacity)
+                        }
+
+                        if let feedback = appState.actionFeedback {
+                            HealthActionFeedbackBanner(feedback: feedback)
                         }
                         
                         LazyVGrid(columns: columns, spacing: 16) {
@@ -144,6 +148,7 @@ struct DashboardView: View {
                                     if appState.isBusy {
                                         ProgressView()
                                             .tint(.white)
+                                        Text("Syncing…")
                                     } else {
                                         Image(systemName: "arrow.triangle.2.circlepath")
                                             .font(.headline)
@@ -329,6 +334,7 @@ private struct HealthPermissionActionView: View {
                     if presentation.isConnectButtonDisabled {
                         ProgressView()
                             .tint(.white)
+                        Text("Requesting Access…")
                     } else {
                         Image(systemName: "checkmark.shield.fill")
                         Text(presentation.connectButtonTitle)
@@ -350,6 +356,43 @@ private struct HealthPermissionActionView: View {
             HealthSyncTheme.disabledGradient
         } else {
             HealthSyncTheme.heartGradient
+        }
+    }
+}
+
+struct HealthActionFeedbackBanner: View {
+    let feedback: HealthActionFeedback
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: feedback.kind.systemImage)
+                .foregroundStyle(feedback.kind.color)
+            Text(feedback.message)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .healthCardStyle(padding: 14)
+        .accessibilityIdentifier("health-action-feedback")
+    }
+}
+
+extension HealthActionFeedback.Kind {
+    var color: Color {
+        switch self {
+        case .success: HealthSyncTheme.successGreen
+        case .info: HealthSyncTheme.primaryBlue
+        case .error: HealthSyncTheme.primaryRed
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .success: "checkmark.circle.fill"
+        case .info: "info.circle.fill"
+        case .error: "exclamationmark.circle.fill"
         }
     }
 }

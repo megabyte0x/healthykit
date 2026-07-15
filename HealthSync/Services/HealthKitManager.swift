@@ -54,7 +54,7 @@ enum HealthKitManagerError: LocalizedError {
         case .healthDataUnavailable:
             "Health data is not available on this device."
         case .authorizationNotDetermined:
-            "Apple Health permissions are not set up yet. Tap Connect Apple Health and allow the requested read permissions."
+            "Health permissions are not set up yet. Tap Continue and review the requested read permissions."
         case let .unsupportedType(type):
             "HealthKit type is not available: \(type.label)."
         case let .statisticsUnavailable(type):

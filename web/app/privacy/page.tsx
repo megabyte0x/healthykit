@@ -5,7 +5,7 @@ import { absoluteUrl } from "@/lib/site";
 const contactEmail = "contact@megabyte0x.xyz";
 const pageTitle = "Privacy Policy";
 const pageDescription =
-  "Privacy policy for HealthSync, the iOS app that reads selected Apple Health data on-device and syncs it only to destinations the user configures.";
+  "Privacy policy for HealthSync, the iOS app that reads selected Apple Health data on-device and syncs it only to a private destination the user accepts or configures.";
 
 const summaryItems = [
   {
@@ -16,7 +16,7 @@ const summaryItems = [
   {
     term: "Sync destination",
     detail:
-      "Health data leaves the device only when you configure a backend or hosted HealthSync storage and start a sync."
+      "Health data leaves the device only after you accept the default private hosted destination or configure your own backend and start a sync."
   },
   {
     term: "Tokens",
@@ -41,7 +41,7 @@ const collectedItems = [
 const useItems = [
   "To sync selected Apple Health data to the backend destination you choose.",
   "To retry failed uploads, deduplicate HealthKit records, and show sync status inside the app.",
-  "To provision hosted HealthSync storage and private read-only agent credentials when you choose that mode.",
+  "To provision hosted HealthSync storage and private read-only agent credentials when you continue with the default hosted mode.",
   "To respond to support requests, manage access requests, and send product communication related to HealthSync."
 ];
 
@@ -121,7 +121,7 @@ export default function PrivacyPage() {
             <h1 id="privacy-title">HealthSync privacy policy.</h1>
             <p className="resource-lede">
               HealthSync is built around user-controlled Apple Health sync. The app reads selected
-              HealthKit data on-device and sends it only to the destination you configure.
+              HealthKit data on-device and sends it only to the private destination you accept or configure.
             </p>
             <p className="policy-updated">Last updated: June 5, 2026</p>
           </div>

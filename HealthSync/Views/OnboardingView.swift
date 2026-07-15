@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum OnboardingStorageDisclosure {
+    static let message = "Continue creates private hosted storage, then requests Health access. You can switch to your own backend later."
+}
+
 struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -44,8 +48,8 @@ struct OnboardingView: View {
                         FeatureRow(
                             icon: "externaldrive.badge.checkmark",
                             iconColor: HealthSyncTheme.primaryBlue,
-                            title: "Private destination",
-                            description: "Use hosted HealthSync storage or point the app at your own backend."
+                            title: "Private hosted storage",
+                            description: OnboardingStorageDisclosure.message
                         )
 
                         FeatureRow(
@@ -79,6 +83,10 @@ struct OnboardingView: View {
                             )
                             .transition(.opacity)
                         }
+
+                        if let feedback = appState.actionFeedback {
+                            HealthActionFeedbackBanner(feedback: feedback)
+                        }
                         
                         Button {
                             Task { await appState.connectAppleHealth() }
@@ -87,9 +95,9 @@ struct OnboardingView: View {
                                 if appState.isBusy {
                                     ProgressView()
                                         .tint(.white)
+                                    Text("Setting Up…")
                                 } else {
-                                    Image(systemName: "heart.fill")
-                                    Text("Connect Apple Health")
+                                    Text("Continue")
                                 }
                             }
                         }

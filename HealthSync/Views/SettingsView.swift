@@ -118,7 +118,7 @@ struct HealthPermissionSettingsPresentation: Equatable {
     let isBusy: Bool
 
     var approvalButtonTitle: String {
-        "Review Apple Health Access"
+        "Continue"
     }
 
     var approvalButtonSystemImage: String {
@@ -568,9 +568,19 @@ struct SettingsView: View {
             Button {
                 Task { await appState.syncLast24Hours() }
             } label: {
-                Label("Sync last 24 hours", systemImage: "arrow.up.doc")
+                if appState.isBusy {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Syncing…")
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Label("Sync last 24 hours", systemImage: "arrow.up.doc")
+                }
             }
             .buttonStyle(SettingsActionButtonStyle(color: HealthSyncTheme.primaryBlue, filled: true))
+            .disabled(appState.isBusy)
 
             NavigationLink {
                 BackfillView()

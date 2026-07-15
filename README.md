@@ -2,7 +2,7 @@
 
 HealthSync is a native SwiftUI iOS app that reads selected Apple Health data on-device through HealthKit and syncs queued JSON batches to a private REST backend.
 
-There is no iCloud or server-side Apple Health REST API. Apple Health reads happen only on the iPhone after the user grants HealthKit read permissions. Health data stays on-device until the user configures a backend URL and auth token.
+There is no iCloud or server-side Apple Health REST API. Apple Health reads happen only on the iPhone after the user grants HealthKit read permissions. Health data stays on-device until the user accepts the default private hosted destination or configures a backend URL and auth token.
 
 Website: https://healthysync.megabyte.sh
 
@@ -168,13 +168,9 @@ iOS may ask for Local Network access the first time the app connects to a LAN ba
 ## App Setup
 
 1. Launch the app.
-2. Tap **Connect Apple Health** and grant read permissions.
-3. Open **Settings**.
-4. Enter the backend URL.
-5. Enter the auth token. It is saved in Keychain.
-6. Choose data type toggles and sync frequency.
-7. Tap **Test connection**.
-8. Tap **Sync last 24 hours** or open **Backfill date range**.
+2. Tap **Continue**. HealthSync creates a private hosted workspace, then asks you to review its read permissions.
+3. Tap **Sync last 24 hours** or open **Backfill date range**.
+4. Optional: open **Settings** to switch to your own backend, choose data types, or change sync frequency.
 
 ## Background Limitations
 

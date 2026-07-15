@@ -327,7 +327,7 @@ final class APIClient: SyncUploading {
         try await Task.sleep(nanoseconds: delay)
     }
 
-    private static func validatedRootURL(from baseURL: String) throws -> URL {
+    static func validatedRootURL(from baseURL: String) throws -> URL {
         let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedURL.isEmpty else { throw APIClientError.missingBackendURL }
         guard
