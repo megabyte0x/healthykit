@@ -35,7 +35,7 @@ actor SyncEngine {
         try await store.appendLog(
             SyncLogEntry(
                 level: .info,
-                message: "Queued \(payload.metrics.count) metrics and \(payload.workouts.count) workouts."
+                message: "Queued \(payload.metrics.count) metrics, \(payload.workouts.count) workouts, and \(payload.deletions.count) deletions."
             )
         )
         return batch
@@ -81,7 +81,7 @@ actor SyncEngine {
                     try await store.recordSyncSuccess(at: Date())
                     uploaded += 1
                     let workspaceDetail = result.workspaceID.map { " to workspace \($0)" } ?? ""
-                    let message = "Uploaded batch \(batch.payload.exportID.uuidString)\(workspaceDetail) (\(result.received) received, \(result.duplicates) duplicates)."
+                    let message = "Uploaded batch \(batch.payload.exportID.uuidString)\(workspaceDetail) (\(result.received) received, \(result.duplicates) duplicates, \(result.deleted) deleted)."
                     messages.append(message)
                     try await store.appendLog(SyncLogEntry(level: .success, message: message))
                 } catch {

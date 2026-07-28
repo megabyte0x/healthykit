@@ -38,7 +38,7 @@ From the repo root, open the iOS project:
 open HealthSync.xcodeproj
 ```
 
-In Xcode, select the `HealthSync` target, set your development team for signing, confirm the HealthKit capability is enabled, then build for an iOS 17+ simulator or device.
+In Xcode, select the `HealthSync` target, set your development team for signing, confirm HealthKit Background Delivery and Background Modes (Background fetch) are enabled, then build for an iOS 17+ simulator or device.
 
 For local persistent sync storage, copy the backend environment template and generate separate secrets for the app ingest token and hosted-token HMAC secret:
 
@@ -87,20 +87,22 @@ X-Device-Id: {stable_local_device_id}
 X-App-Version: {app_version}
 ```
 
-Every metric and workout uses a deterministic ID of `healthkit:{sample_uuid}`. Every upload batch has its own `export_id`, and failed batches remain queued locally for retry.
+Every metric and workout uses a deterministic ID of `healthkit:{sample_uuid}`. Incremental payloads also include HealthKit deletions as `deletions: [{"id":"healthkit:{sample_uuid}","kind":"metric|workout"}]`. The backend scopes deletions to the authenticated workspace and originating device, so retries are safe and cannot remove another device's records.
+
+Every upload batch has its own `export_id`. Failed additions and deletions remain queued locally for retry.
 
 ## Local Persistence
 
 The app uses SQLite for settings, selected data types, sync frequency, HealthKit anchors, queued upload batches, sync logs, and the stable local device ID. Auth tokens are stored only in Keychain.
 
-Successful batches are marked uploaded and pruned after 7 days. Failed network/server uploads remain queued.
+Successful batches are marked uploaded and pruned after 7 days. Failed network/server uploads remain queued and are retried by the next manual, foreground, HealthKit observer, or scheduled background sync.
 
 ## Open And Build
 
 1. Open `HealthSync.xcodeproj` in Xcode 16 or newer.
 2. Select the `HealthSync` target.
 3. Set your development team for signing.
-4. Confirm the HealthKit capability is enabled.
+4. Confirm HealthKit Background Delivery and Background Modes (Background fetch) are enabled.
 5. Build for an iOS 17+ simulator or device.
 
 CLI build:
@@ -174,7 +176,15 @@ iOS may ask for Local Network access the first time the app connects to a LAN ba
 
 ## Background Limitations
 
-HealthSync uses `HKObserverQuery` and HealthKit background delivery where iOS permits it. It also supports hourly/daily best-effort sync while the app is alive. iOS does not guarantee background sync timing, especially while the phone is locked, in Low Power Mode, recently rebooted, or when the system suppresses background work.
+HealthSync combines three best-effort wake-up paths:
+
+- `HKObserverQuery` background delivery when Apple Health saves or deletes selected samples.
+- `BGAppRefreshTask` requests for the chosen hourly or daily cadence, including while the app is suspended or terminated by the system.
+- An in-process timer plus a catch-up sync when the app is open or becomes active.
+
+New installs default to hourly best-effort. Choosing Manual only cancels scheduled refreshes and HealthKit background delivery. Each background execution schedules its successor, retries every queued batch, and advances HealthKit anchors only after additions and deletions are durably written to SQLite.
+
+iOS decides when background work runs and does not guarantee an exact hourly/daily time, especially while the phone is locked, in Low Power Mode, recently rebooted, force-quit by the user, or when the system suppresses background work. HealthKit background delivery must be verified on a physical iPhone because the Simulator does not support background server queries.
 
 Manual sync and backfill are the reliable paths.
 

@@ -1,5 +1,25 @@
 import Foundation
+import BackgroundTasks
 import SwiftUI
+
+struct BackgroundSyncScheduler {
+    static let taskIdentifier = "com.megabyte0x.HealthSync.background-sync"
+
+    func reschedule(for frequency: SyncFrequency, now: Date = Date()) throws {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.taskIdentifier)
+        guard let earliestBeginDate = BackgroundSyncSchedule.earliestBeginDate(for: frequency, now: now) else {
+            return
+        }
+
+        let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
+        request.earliestBeginDate = earliestBeginDate
+        try BGTaskScheduler.shared.submit(request)
+    }
+
+    func cancel() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.taskIdentifier)
+    }
+}
 
 enum HealthSyncUserMessages {
     static let noNewSamplesFound = "No new Apple Health samples found."
@@ -147,9 +167,27 @@ final class AppState: ObservableObject {
     private let healthKit = HealthKitManager()
     private let normalizer = HealthNormalizer()
     private let keychain = KeychainStore()
+    private let backgroundSyncScheduler = BackgroundSyncScheduler()
     private var periodicSyncTask: Task<Void, Never>?
+    private var bootstrapTask: Task<Void, Never>?
+    private var pendingIncrementalSync = false
+    private var pendingIncrementalWaiters: [CheckedContinuation<Bool, Never>] = []
 
     func bootstrap() async {
+        if let bootstrapTask {
+            await bootstrapTask.value
+            return
+        }
+
+        let task = Task<Void, Never> { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performBootstrap()
+        }
+        bootstrapTask = task
+        await task.value
+    }
+
+    private func performBootstrap() async {
         do {
             let localStore = try SQLiteLocalStore()
             store = localStore
@@ -167,7 +205,7 @@ final class AppState: ObservableObject {
                 : "Unavailable"
             try await localStore.pruneUploaded(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
             await refresh()
-            startObserversIfPossible()
+            await startObserversIfPossible()
             restartPeriodicSync()
         } catch {
             lastError = userMessage(from: error)
@@ -193,7 +231,8 @@ final class AppState: ObservableObject {
             permissionSummary = "Requested"
             actionFeedback = .permissionRequested
             try await saveSettingsOnly()
-            startObserversIfPossible()
+            await startObserversIfPossible()
+            restartPeriodicSync()
         }
     }
 
@@ -213,7 +252,7 @@ final class AppState: ObservableObject {
                 authTokenDraft = ""
                 hasStoredToken = true
             }
-            startObserversIfPossible()
+            await startObserversIfPossible()
             restartPeriodicSync()
         }
     }
@@ -374,41 +413,87 @@ final class AppState: ObservableObject {
         }
     }
 
-    func syncIncremental() async {
+    @discardableResult
+    func syncIncremental() async -> Bool {
+        guard BusyOperation.canStart(isBusy: isBusy) else {
+            pendingIncrementalSync = true
+            return await withCheckedContinuation { continuation in
+                pendingIncrementalWaiters.append(continuation)
+            }
+        }
+
+        var succeeded = false
         await runBusy {
-            guard let store, let syncEngine else { throw APIClientError.invalidResponse }
-            try await ensureHealthPermissionsRequested()
-            let configuration = try await uploadConfiguration()
-            var anchors: [HealthDataType: String] = [:]
-            for type in settings.selectedTypes {
-                if let anchor = try await store.loadAnchor(for: type) {
-                    anchors[type] = anchor
-                }
+            try await syncIncrementalThrowing()
+            succeeded = true
+        }
+        return succeeded
+    }
+
+    func performBackgroundSync() async {
+        await bootstrap()
+        restartPeriodicSync()
+        guard canRunAutomaticSync else { return }
+        _ = await syncIncremental()
+    }
+
+    func sceneDidBecomeActive() async {
+        await bootstrap()
+        restartPeriodicSync()
+        guard canRunAutomaticSync else { return }
+        _ = await syncIncremental()
+    }
+
+    func sceneDidEnterBackground() {
+        restartPeriodicSync()
+    }
+
+    private func syncIncrementalThrowing() async throws {
+        guard let store, let syncEngine else { throw APIClientError.invalidResponse }
+        try Task.checkCancellation()
+        try await ensureHealthPermissionsRequested()
+        let configuration = try await uploadConfiguration()
+        var anchors: [HealthDataType: String] = [:]
+        for type in settings.selectedTypes {
+            if let anchor = try await store.loadAnchor(for: type) {
+                anchors[type] = anchor
             }
-            let result = try await healthKit.fetchIncremental(types: settings.selectedTypes, anchors: anchors)
-            guard !result.fetchResult.isEmpty else {
-                try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noNewSamplesFound))
-                await refresh()
-                return
-            }
-            let deviceID = try await store.deviceID()
+        }
+
+        let result: HealthKitIncrementalResult
+        do {
+            result = try await healthKit.fetchIncremental(types: settings.selectedTypes, anchors: anchors)
+        } catch {
+            // HealthKit and network availability fail independently; still retry durable queued work.
+            _ = await syncEngine.uploadPending(configuration: configuration)
+            throw error
+        }
+        try Task.checkCancellation()
+        if !result.fetchResult.isEmpty || !result.deletions.isEmpty {
             let now = Date()
             let payload = try normalizer.payload(
-                deviceID: deviceID,
+                deviceID: try await store.deviceID(),
                 dateRange: SyncDateRange(start: now, end: now),
                 timezone: TimeZone.current.identifier,
                 quantitySamples: result.fetchResult.quantitySamples,
                 sleepSamples: result.fetchResult.sleepSamples,
                 categorySamples: result.fetchResult.categorySamples,
-                workoutSamples: result.fetchResult.workoutSamples
+                workoutSamples: result.fetchResult.workoutSamples,
+                deletions: result.deletions
             )
-            let batch = try await syncEngine.queue(payload: payload)
-            for (type, anchor) in result.anchors {
-                try await store.saveAnchor(anchor, for: type)
-            }
-            _ = await syncEngine.uploadQueuedBatch(batch, configuration: configuration)
-            await refresh()
+            _ = try await syncEngine.queue(payload: payload)
+        } else {
+            try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noNewSamplesFound))
         }
+
+        // Anchors advance only after every addition/deletion is durably queued.
+        for (type, anchor) in result.anchors {
+            try await store.saveAnchor(anchor, for: type)
+        }
+
+        let uploadResult = await syncEngine.uploadPending(configuration: configuration)
+        try BackfillSync.validateUpload(uploadResult)
+        await refresh()
     }
 
     private func syncDateRangeThrowing(
@@ -462,7 +547,8 @@ final class AppState: ObservableObject {
         shouldShowOnboarding = false
         permissionSummary = "Requested"
         try await saveSettingsOnly()
-        startObserversIfPossible()
+        await startObserversIfPossible()
+        restartPeriodicSync()
     }
 
     private func uploadConfiguration() async throws -> UploadConfiguration {
@@ -494,14 +580,21 @@ final class AppState: ObservableObject {
         return !(token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func startObserversIfPossible() {
-        guard settings.hasRequestedHealthPermissions else { return }
-        guard hasUsableUploadConfiguration() else { return }
+    private func startObserversIfPossible() async {
+        guard settings.hasRequestedHealthPermissions else {
+            await healthKit.stopObserverQueries()
+            return
+        }
+        guard settings.syncFrequency != .manualOnly, hasUsableUploadConfiguration() else {
+            await healthKit.stopObserverQueries(disabling: Set(HealthDataType.allCases))
+            return
+        }
         do {
-            try healthKit.startObserverQueries(types: settings.selectedTypes) { [weak self] _ in
-                Task { @MainActor in
-                    await self?.syncIncremental()
-                }
+            try await healthKit.startObserverQueries(
+                types: settings.selectedTypes,
+                frequency: settings.syncFrequency
+            ) { [weak self] _ in
+                await self?.syncIncremental()
             }
         } catch {
             lastError = userMessage(from: error)
@@ -510,11 +603,21 @@ final class AppState: ObservableObject {
 
     private func restartPeriodicSync() {
         periodicSyncTask?.cancel()
-        guard hasUsableUploadConfiguration() else { return }
+        backgroundSyncScheduler.cancel()
+        guard settings.hasRequestedHealthPermissions, hasUsableUploadConfiguration() else { return }
         guard let interval = settings.syncFrequency.intervalSeconds else { return }
+        do {
+            try backgroundSyncScheduler.reschedule(for: settings.syncFrequency)
+        } catch {
+            let message = "iOS could not schedule the next background sync: \(error.localizedDescription)"
+            Task { [weak self] in
+                try? await self?.store?.appendLog(SyncLogEntry(level: .error, message: message))
+            }
+        }
         periodicSyncTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: interval * 1_000_000_000)
+                guard !Task.isCancelled else { return }
                 await self?.syncIncremental()
             }
         }
@@ -527,12 +630,29 @@ final class AppState: ObservableObject {
         return (try? hasTokenForCurrentStorageMode()) == true
     }
 
+    private var canRunAutomaticSync: Bool {
+        settings.hasRequestedHealthPermissions
+            && settings.syncFrequency != .manualOnly
+            && hasUsableUploadConfiguration()
+    }
+
     private func runBusy(_ operation: () async throws -> Void) async {
         guard BusyOperation.canStart(isBusy: isBusy) else { return }
         isBusy = true
         lastError = nil
         actionFeedback = nil
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            if pendingIncrementalSync {
+                pendingIncrementalSync = false
+                let waiters = pendingIncrementalWaiters
+                pendingIncrementalWaiters.removeAll()
+                Task { @MainActor [weak self] in
+                    let succeeded = await self?.syncIncremental() ?? false
+                    waiters.forEach { $0.resume(returning: succeeded) }
+                }
+            }
+        }
         do {
             try await operation()
             await refresh()

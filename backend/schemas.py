@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +41,11 @@ class HealthWorkoutIn(BaseModel):
     metadata: JsonMetadata = Field(default_factory=dict)
 
 
+class HealthRecordDeletionIn(BaseModel):
+    id: str
+    kind: Literal["metric", "workout"]
+
+
 class SyncPayloadIn(BaseModel):
     device_id: str
     export_id: UUID
@@ -50,12 +56,14 @@ class SyncPayloadIn(BaseModel):
     date_range: SyncDateRange
     metrics: list[HealthMetricIn] = Field(default_factory=list)
     workouts: list[HealthWorkoutIn] = Field(default_factory=list)
+    deletions: list[HealthRecordDeletionIn] = Field(default_factory=list)
 
 
 class UploadResult(BaseModel):
     ok: bool
     received: int
     duplicates: int
+    deleted: int = 0
 
 
 class HostedWorkspaceCreate(BaseModel):

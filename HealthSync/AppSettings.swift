@@ -24,6 +24,13 @@ enum SyncFrequency: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum BackgroundSyncSchedule {
+    static func earliestBeginDate(for frequency: SyncFrequency, now: Date = Date()) -> Date? {
+        guard let interval = frequency.intervalSeconds else { return nil }
+        return now.addingTimeInterval(TimeInterval(interval))
+    }
+}
+
 enum StorageMode: String, CaseIterable, Codable, Identifiable {
     case customBackend
     case hostedHealthSync
@@ -69,7 +76,7 @@ struct AppSettings: Codable, Equatable {
     static let `default` = AppSettings(
         backendURL: "",
         selectedTypes: Set(HealthDataType.allCases),
-        syncFrequency: .manualOnly,
+        syncFrequency: .hourlyBestEffort,
         hasRequestedHealthPermissions: false,
         storageMode: .hostedHealthSync,
         hostedWorkspaceID: nil,

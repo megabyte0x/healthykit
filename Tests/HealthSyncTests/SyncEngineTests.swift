@@ -253,6 +253,20 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(firstResult.uploadedCount, 1)
         XCTAssertEqual(secondResult.uploadedCount, 0)
     }
+
+    func testBackgroundScheduleUsesConfiguredBestEffortCadence() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        XCTAssertNil(BackgroundSyncSchedule.earliestBeginDate(for: .manualOnly, now: now))
+        XCTAssertEqual(
+            BackgroundSyncSchedule.earliestBeginDate(for: .hourlyBestEffort, now: now),
+            now.addingTimeInterval(60 * 60)
+        )
+        XCTAssertEqual(
+            BackgroundSyncSchedule.earliestBeginDate(for: .dailyBestEffort, now: now),
+            now.addingTimeInterval(24 * 60 * 60)
+        )
+    }
 }
 
 final class BackfillSyncTests: XCTestCase {
@@ -290,6 +304,33 @@ final class BackfillSyncTests: XCTestCase {
         XCTAssertTrue(chunks.allSatisfy(\.workouts.isEmpty))
         XCTAssertEqual(Set(chunks.map(\.exportID)).count, 3)
         XCTAssertTrue(chunks.allSatisfy { $0.dateRange == payload.dateRange })
+    }
+
+    func testDeletionOnlyPayloadIsUploadableAndChunked() {
+        let payload = SyncPayload(
+            deviceID: "device-123",
+            exportID: UUID(),
+            generatedAt: Date(timeIntervalSince1970: 0),
+            timezone: "Asia/Kolkata",
+            source: "ios-healthkit",
+            schemaVersion: 2,
+            dateRange: SyncDateRange(
+                start: Date(timeIntervalSince1970: 0),
+                end: Date(timeIntervalSince1970: 60)
+            ),
+            metrics: [],
+            workouts: [],
+            deletions: (0..<205).map {
+                HealthRecordDeletion(id: "healthkit:deleted-\($0)", kind: $0.isMultiple(of: 2) ? .metric : .workout)
+            }
+        )
+
+        let chunks = payload.chunked(maxRecords: 100)
+
+        XCTAssertFalse(payload.isEmpty)
+        XCTAssertEqual(chunks.map(\.deletions.count), [100, 100, 5])
+        XCTAssertTrue(chunks.allSatisfy(\.metrics.isEmpty))
+        XCTAssertTrue(chunks.allSatisfy(\.workouts.isEmpty))
     }
 
     func testEmptyBackfillPayloadDoesNotNeedUpload() {

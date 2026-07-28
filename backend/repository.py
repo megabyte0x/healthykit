@@ -156,6 +156,7 @@ def persist_sync_payload(
     received_at = datetime.now(timezone.utc)
     export_id = str(payload.export_id)
     duplicates = 0
+    deleted = 0
 
     try:
         ensure_workspace(db, workspace_id, received_at)
@@ -187,9 +188,9 @@ def persist_sync_payload(
         else:
             workspace_device.last_seen_at = received_at
 
-        if not payload.metrics and not payload.workouts:
+        if not payload.metrics and not payload.workouts and not payload.deletions:
             db.commit()
-            return UploadResult(ok=True, received=0, duplicates=0)
+            return UploadResult(ok=True, received=0, duplicates=0, deleted=0)
 
         batch = db.get(SyncBatchRecord, (workspace_id, export_id))
         if batch is None:
@@ -213,6 +214,18 @@ def persist_sync_payload(
             batch.received_at = received_at
             batch.metrics_count = len(payload.metrics)
             batch.workouts_count = len(payload.workouts)
+
+        for deletion in payload.deletions:
+            model = HealthWorkoutRecord if deletion.kind == "workout" else HealthMetricRecord
+            deleted += (
+                db.query(model)
+                .filter(
+                    model.workspace_id == workspace_id,
+                    model.device_id == payload.device_id,
+                    model.id == deletion.id,
+                )
+                .delete(synchronize_session=False)
+            )
 
         for metric in payload.metrics:
             record = db.get(HealthMetricRecord, (workspace_id, payload.device_id, metric.id))
@@ -285,7 +298,12 @@ def persist_sync_payload(
         db.rollback()
         raise
 
-    return UploadResult(ok=True, received=len(payload.metrics) + len(payload.workouts), duplicates=duplicates)
+    return UploadResult(
+        ok=True,
+        received=len(payload.metrics) + len(payload.workouts),
+        duplicates=duplicates,
+        deleted=deleted,
+    )
 
 
 def list_metrics(

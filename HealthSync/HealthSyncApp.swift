@@ -12,11 +12,15 @@ struct HealthSyncApp: App {
                     await appState.bootstrap()
                 }
         }
+        .backgroundTask(.appRefresh(BackgroundSyncScheduler.taskIdentifier)) {
+            await appState.performBackgroundSync()
+        }
     }
 }
 
 struct ContentRootView: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = InitialAppTab.resolve()
 
     var body: some View {
@@ -37,6 +41,20 @@ struct ContentRootView: View {
                         }
                         .tag(AppTab.settings)
                 }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active:
+                Task {
+                    await appState.sceneDidBecomeActive()
+                }
+            case .background:
+                appState.sceneDidEnterBackground()
+            case .inactive:
+                break
+            @unknown default:
+                break
             }
         }
     }

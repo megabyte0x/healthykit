@@ -102,6 +102,7 @@ final class APIClientTests: XCTestCase {
 
         XCTAssertEqual(result.workspaceID, "wk_test")
         XCTAssertEqual(result.exportID, "export-123")
+        XCTAssertEqual(result.deleted, 0)
     }
 
     func testNetworkFailureMessagesExposeActionableCause() {
@@ -120,6 +121,7 @@ final class AppSettingsHostedEndpointTests: XCTestCase {
     func testCleanInstallDefaultsToHostedStorageSoManualSyncHasASetupPath() {
         XCTAssertEqual(AppSettings.default.storageMode, .hostedHealthSync)
         XCTAssertEqual(AppSettings.default.effectiveBackendURL, AppSettings.hostedBackendURL)
+        XCTAssertEqual(AppSettings.default.syncFrequency, .hourlyBestEffort)
     }
 
     func testDefaultSettingsSelectEverySupportedHealthDataType() {

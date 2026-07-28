@@ -800,6 +800,7 @@ struct HealthNormalizer {
         sleepSamples: [HealthSleepSampleDTO],
         categorySamples: [HealthCategorySampleDTO] = [],
         workoutSamples: [HealthWorkoutSampleDTO],
+        deletions: [HealthRecordDeletion] = [],
         generatedAt: Date = Date()
     ) throws -> SyncPayload {
         SyncPayload(
@@ -808,10 +809,11 @@ struct HealthNormalizer {
             generatedAt: generatedAt,
             timezone: timezone,
             source: "ios-healthkit",
-            schemaVersion: 1,
+            schemaVersion: 2,
             dateRange: dateRange,
             metrics: try metrics(from: quantitySamples) + sleepMetrics(from: sleepSamples) + categoryMetrics(from: categorySamples),
-            workouts: workouts(from: workoutSamples)
+            workouts: workouts(from: workoutSamples),
+            deletions: deletions
         )
     }
 

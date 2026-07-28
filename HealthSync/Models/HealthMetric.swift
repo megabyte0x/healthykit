@@ -29,6 +29,23 @@ struct SyncDateRange: Codable, Equatable {
     let end: Date
 }
 
+struct HealthRecordDeletion: Codable, Equatable, Hashable {
+    enum Kind: String, Codable {
+        case metric
+        case workout
+    }
+
+    let id: String
+    let kind: Kind
+
+    static func healthKit(uuid: UUID, type: HealthDataType) -> HealthRecordDeletion {
+        HealthRecordDeletion(
+            id: "healthkit:\(uuid.uuidString)",
+            kind: type == .workouts ? .workout : .metric
+        )
+    }
+}
+
 struct SyncPayload: Codable, Equatable {
     let deviceID: String
     let exportID: UUID
@@ -39,34 +56,46 @@ struct SyncPayload: Codable, Equatable {
     let dateRange: SyncDateRange
     let metrics: [HealthMetric]
     let workouts: [HealthWorkout]
+    let deletions: [HealthRecordDeletion]
 
     var isEmpty: Bool {
-        metrics.isEmpty && workouts.isEmpty
+        metrics.isEmpty && workouts.isEmpty && deletions.isEmpty
     }
 
     func chunked(maxRecords: Int) -> [SyncPayload] {
         let recordLimit = max(1, maxRecords)
-        guard metrics.count + workouts.count > recordLimit else { return [self] }
+        guard metrics.count + workouts.count + deletions.count > recordLimit else { return [self] }
 
         var chunks: [SyncPayload] = []
         var metricIndex = metrics.startIndex
         while metricIndex < metrics.endIndex {
             let nextIndex = metrics.index(metricIndex, offsetBy: recordLimit, limitedBy: metrics.endIndex) ?? metrics.endIndex
-            chunks.append(copy(metrics: Array(metrics[metricIndex..<nextIndex]), workouts: []))
+            chunks.append(copy(metrics: Array(metrics[metricIndex..<nextIndex]), workouts: [], deletions: []))
             metricIndex = nextIndex
         }
 
         var workoutIndex = workouts.startIndex
         while workoutIndex < workouts.endIndex {
             let nextIndex = workouts.index(workoutIndex, offsetBy: recordLimit, limitedBy: workouts.endIndex) ?? workouts.endIndex
-            chunks.append(copy(metrics: [], workouts: Array(workouts[workoutIndex..<nextIndex])))
+            chunks.append(copy(metrics: [], workouts: Array(workouts[workoutIndex..<nextIndex]), deletions: []))
             workoutIndex = nextIndex
+        }
+
+        var deletionIndex = deletions.startIndex
+        while deletionIndex < deletions.endIndex {
+            let nextIndex = deletions.index(deletionIndex, offsetBy: recordLimit, limitedBy: deletions.endIndex) ?? deletions.endIndex
+            chunks.append(copy(metrics: [], workouts: [], deletions: Array(deletions[deletionIndex..<nextIndex])))
+            deletionIndex = nextIndex
         }
 
         return chunks
     }
 
-    private func copy(metrics: [HealthMetric], workouts: [HealthWorkout]) -> SyncPayload {
+    private func copy(
+        metrics: [HealthMetric],
+        workouts: [HealthWorkout],
+        deletions: [HealthRecordDeletion]
+    ) -> SyncPayload {
         SyncPayload(
             deviceID: deviceID,
             exportID: UUID(),
@@ -76,7 +105,8 @@ struct SyncPayload: Codable, Equatable {
             schemaVersion: schemaVersion,
             dateRange: dateRange,
             metrics: metrics,
-            workouts: workouts
+            workouts: workouts,
+            deletions: deletions
         )
     }
 
@@ -90,6 +120,45 @@ struct SyncPayload: Codable, Equatable {
         case dateRange = "date_range"
         case metrics
         case workouts
+        case deletions
+    }
+
+    init(
+        deviceID: String,
+        exportID: UUID,
+        generatedAt: Date,
+        timezone: String,
+        source: String,
+        schemaVersion: Int,
+        dateRange: SyncDateRange,
+        metrics: [HealthMetric],
+        workouts: [HealthWorkout],
+        deletions: [HealthRecordDeletion] = []
+    ) {
+        self.deviceID = deviceID
+        self.exportID = exportID
+        self.generatedAt = generatedAt
+        self.timezone = timezone
+        self.source = source
+        self.schemaVersion = schemaVersion
+        self.dateRange = dateRange
+        self.metrics = metrics
+        self.workouts = workouts
+        self.deletions = deletions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        deviceID = try container.decode(String.self, forKey: .deviceID)
+        exportID = try container.decode(UUID.self, forKey: .exportID)
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+        timezone = try container.decode(String.self, forKey: .timezone)
+        source = try container.decode(String.self, forKey: .source)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        dateRange = try container.decode(SyncDateRange.self, forKey: .dateRange)
+        metrics = try container.decode([HealthMetric].self, forKey: .metrics)
+        workouts = try container.decode([HealthWorkout].self, forKey: .workouts)
+        deletions = try container.decodeIfPresent([HealthRecordDeletion].self, forKey: .deletions) ?? []
     }
 
     static func empty(deviceID: String, dateRange: SyncDateRange, timezone: String) -> SyncPayload {
@@ -102,7 +171,8 @@ struct SyncPayload: Codable, Equatable {
             schemaVersion: 1,
             dateRange: dateRange,
             metrics: [],
-            workouts: []
+            workouts: [],
+            deletions: []
         )
     }
 }

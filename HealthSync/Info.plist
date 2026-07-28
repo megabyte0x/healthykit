@@ -18,6 +18,10 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.megabyte0x.HealthSync.background-sync</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>This app reads selected Apple Health data to sync it to your private health dashboard.</string>
 	<key>NSHealthUpdateUsageDescription</key>
@@ -33,6 +37,10 @@
 	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

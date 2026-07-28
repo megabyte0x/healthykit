@@ -95,11 +95,29 @@ def test_sync_persists_and_dedupes_records(tmp_path: Path) -> None:
 
     first = client.post("/api/apple-health/sync", headers=headers, json=sample_payload())
     assert first.status_code == 200
-    assert first.json() == {"ok": True, "received": 2, "duplicates": 0}
+    assert first.json() == {"ok": True, "received": 2, "duplicates": 0, "deleted": 0}
 
     second = client.post("/api/apple-health/sync", headers=headers, json=sample_payload())
     assert second.status_code == 200
-    assert second.json() == {"ok": True, "received": 2, "duplicates": 2}
+    assert second.json() == {"ok": True, "received": 2, "duplicates": 2, "deleted": 0}
+
+
+def test_sync_upserts_newest_values_for_existing_record_ids(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = {"Authorization": "Bearer test-token"}
+    assert client.post("/api/apple-health/sync", headers=headers, json=sample_payload()).status_code == 200
+
+    updated = sample_payload("22222222-2222-4222-8222-222222222222")
+    updated["metrics"][0]["value"] = 9876
+    updated["metrics"][0]["metadata"] = {"corrected": True}
+    response = client.post("/api/apple-health/sync", headers=headers, json=updated)
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "received": 2, "duplicates": 2, "deleted": 0}
+    metrics = client.get("/api/apple-health/metrics?device_id=device-1", headers=headers).json()["items"]
+    assert len(metrics) == 1
+    assert metrics[0]["value"] == 9876
+    assert metrics[0]["metadata"] == {"corrected": True}
 
 
 def test_empty_sync_is_accepted_without_persisting_empty_batch(tmp_path: Path) -> None:
@@ -116,11 +134,42 @@ def test_empty_sync_is_accepted_without_persisting_empty_batch(tmp_path: Path) -
     )
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "received": 0, "duplicates": 0}
+    assert response.json() == {"ok": True, "received": 0, "duplicates": 0, "deleted": 0}
     with client.app.state.session_factory() as db:
         from backend.models import SyncBatchRecord
 
         assert db.query(SyncBatchRecord).count() == 0
+
+
+def test_sync_deletions_are_device_scoped_and_idempotent(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = {"Authorization": "Bearer test-token"}
+    assert client.post("/api/apple-health/sync", headers=headers, json=sample_payload()).status_code == 200
+
+    wrong_device_deletion = sample_payload("22222222-2222-4222-8222-222222222222")
+    wrong_device_deletion["device_id"] = "device-2"
+    wrong_device_deletion["metrics"] = []
+    wrong_device_deletion["workouts"] = []
+    wrong_device_deletion["deletions"] = [
+        {"id": "healthkit:metric-1", "kind": "metric"},
+        {"id": "healthkit:workout-1", "kind": "workout"},
+    ]
+    wrong_device = client.post("/api/apple-health/sync", headers=headers, json=wrong_device_deletion)
+    assert wrong_device.status_code == 200
+    assert wrong_device.json()["deleted"] == 0
+
+    deletion = deepcopy(wrong_device_deletion)
+    deletion["device_id"] = "device-1"
+    deletion["export_id"] = "33333333-3333-4333-8333-333333333333"
+    first = client.post("/api/apple-health/sync", headers=headers, json=deletion)
+    second = client.post("/api/apple-health/sync", headers=headers, json=deletion)
+
+    assert first.status_code == 200
+    assert first.json() == {"ok": True, "received": 0, "duplicates": 0, "deleted": 2}
+    assert second.status_code == 200
+    assert second.json() == {"ok": True, "received": 0, "duplicates": 0, "deleted": 0}
+    assert client.get("/api/apple-health/metrics?device_id=device-1", headers=headers).json()["items"] == []
+    assert client.get("/api/apple-health/workouts?device_id=device-1", headers=headers).json()["items"] == []
 
 
 def test_fetch_metrics_workouts_and_syncs(tmp_path: Path) -> None:
@@ -199,6 +248,35 @@ def test_hosted_sync_rows_are_workspace_scoped(tmp_path: Path) -> None:
         assert batch.workspace_id == provisioned["workspace_id"]
         assert metric.workspace_id == provisioned["workspace_id"]
         assert workout.workspace_id == provisioned["workspace_id"]
+
+
+def test_hosted_deletions_cannot_cross_workspace_boundaries(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    first = client.post("/api/hosted/workspaces", json={"label": "First"}).json()
+    second = client.post("/api/hosted/workspaces", json={"label": "Second"}).json()
+    first_ingest = {"Authorization": f"Bearer {first['ingest_token']}"}
+    second_ingest = {"Authorization": f"Bearer {second['ingest_token']}"}
+    first_agent = {"Authorization": f"Bearer {first['agent_token']}"}
+    second_agent = {"Authorization": f"Bearer {second['agent_token']}"}
+
+    assert client.post("/api/apple-health/sync", headers=first_ingest, json=sample_payload()).status_code == 200
+    assert client.post("/api/apple-health/sync", headers=second_ingest, json=sample_payload()).status_code == 200
+
+    deletion = sample_payload("22222222-2222-4222-8222-222222222222")
+    deletion["metrics"] = []
+    deletion["workouts"] = []
+    deletion["deletions"] = [
+        {"id": "healthkit:metric-1", "kind": "metric"},
+        {"id": "healthkit:workout-1", "kind": "workout"},
+    ]
+    response = client.post("/api/apple-health/sync", headers=first_ingest, json=deletion)
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] == 2
+    assert client.get("/api/agent/health-data", headers=first_agent).json()["metrics"] == []
+    assert client.get("/api/agent/health-data", headers=first_agent).json()["workouts"] == []
+    assert len(client.get("/api/agent/health-data", headers=second_agent).json()["metrics"]) == 1
+    assert len(client.get("/api/agent/health-data", headers=second_agent).json()["workouts"]) == 1
 
 
 def test_hosted_token_capabilities_are_separated(tmp_path: Path) -> None:

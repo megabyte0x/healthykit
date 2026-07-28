@@ -211,13 +211,14 @@ async function ingestSync(req: Request): Promise<Response> {
   const exportId = requiredString(payload.export_id, "export_id");
   const metrics = Array.isArray(payload.metrics) ? payload.metrics : [];
   const workouts = Array.isArray(payload.workouts) ? payload.workouts : [];
+  const deletions = readDeletions(payload.deletions);
   const appVersion = req.headers.get("X-App-Version");
 
   await ensureWorkspace(auth.workspaceId, now);
   await upsertDevice(deviceId, now, appVersion);
   await upsertWorkspaceDevice(auth.workspaceId, deviceId, now);
 
-  if (metrics.length === 0 && workouts.length === 0) {
+  if (metrics.length === 0 && workouts.length === 0 && deletions.length === 0) {
     console.info("healthsync_empty_ingest", {
       workspace_id: auth.workspaceId,
       export_id: exportId,
@@ -227,11 +228,13 @@ async function ingestSync(req: Request): Promise<Response> {
       ok: true,
       received: 0,
       duplicates: 0,
+      deleted: 0,
       workspace_id: auth.workspaceId,
       export_id: exportId,
     });
   }
 
+  const deleted = await deleteHealthRecords(auth.workspaceId, deviceId, deletions);
   const duplicates = await countExistingRows(auth.workspaceId, deviceId, metrics, workouts);
 
   await requireOk(
@@ -304,6 +307,8 @@ async function ingestSync(req: Request): Promise<Response> {
     device_id: deviceId,
     metrics_count: metrics.length,
     workouts_count: workouts.length,
+    deletions_count: deletions.length,
+    deleted_count: deleted,
     duplicates,
   });
 
@@ -311,6 +316,7 @@ async function ingestSync(req: Request): Promise<Response> {
     ok: true,
     received: metrics.length + workouts.length,
     duplicates,
+    deleted,
     workspace_id: auth.workspaceId,
     export_id: exportId,
   });
@@ -653,6 +659,65 @@ async function countExistingRows(
     countExistingIds("health_workouts", workspaceId, deviceId, workoutIds),
   ]);
   return metricCount + workoutCount;
+}
+
+type HealthRecordDeletion = { id: string; kind: "metric" | "workout" };
+
+function readDeletions(value: unknown): HealthRecordDeletion[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new HttpError(400, "Expected deletions array");
+  }
+
+  return value.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new HttpError(400, `Expected deletions[${index}] object`);
+    }
+    const id = requiredString(item.id, `deletions[${index}].id`);
+    const kind = requiredString(item.kind, `deletions[${index}].kind`);
+    if (kind !== "metric" && kind !== "workout") {
+      throw new HttpError(400, `Invalid deletions[${index}].kind`);
+    }
+    return { id, kind };
+  });
+}
+
+async function deleteHealthRecords(
+  workspaceId: string,
+  deviceId: string,
+  deletions: HealthRecordDeletion[],
+): Promise<number> {
+  const metricIds = deletions.filter((item) => item.kind === "metric").map((item) => item.id);
+  const workoutIds = deletions.filter((item) => item.kind === "workout").map((item) => item.id);
+  const [metricCount, workoutCount] = await Promise.all([
+    deleteHealthRecordIds("health_metrics", workspaceId, deviceId, metricIds),
+    deleteHealthRecordIds("health_workouts", workspaceId, deviceId, workoutIds),
+  ]);
+  return metricCount + workoutCount;
+}
+
+async function deleteHealthRecordIds(
+  table: string,
+  workspaceId: string,
+  deviceId: string,
+  ids: string[],
+): Promise<number> {
+  let deleted = 0;
+  for (const idChunk of chunks([...new Set(ids)], maxRowsPerDatabaseRequest)) {
+    const { count, error } = await db
+      .from(table)
+      .delete({ count: "exact" })
+      .eq("workspace_id", workspaceId)
+      .eq("device_id", deviceId)
+      .in("id", idChunk);
+    if (error) {
+      throw error;
+    }
+    deleted += count ?? 0;
+  }
+  return deleted;
 }
 
 async function countExistingIds(

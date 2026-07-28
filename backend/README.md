@@ -126,7 +126,7 @@ The migration creates:
 - `health_metrics`
 - `health_workouts`
 
-Metric and workout rows are unique by `workspace_id`, `device_id`, and HealthKit record `id`, so app retries are safe without mixing hosted workspaces.
+Metric and workout rows are unique by `workspace_id`, `device_id`, and HealthKit record `id`, so app retries are safe without mixing hosted workspaces. Incremental deletion requests use the same workspace/device scope and are idempotent.
 
 ## API
 
@@ -191,15 +191,20 @@ curl -X POST "http://127.0.0.1:8080/api/apple-health/sync" \
     "generated_at": "2026-05-31T10:00:00.000Z",
     "timezone": "Asia/Kolkata",
     "source": "ios-healthkit",
-    "schema_version": 1,
+    "schema_version": 2,
     "date_range": {
       "start": "2026-05-30T10:00:00.000Z",
       "end": "2026-05-31T10:00:00.000Z"
     },
     "metrics": [],
-    "workouts": []
+    "workouts": [],
+    "deletions": [
+      {"id": "healthkit:sample-uuid", "kind": "metric"}
+    ]
   }'
 ```
+
+The response reports additions in `received`, already-existing upserts in `duplicates`, and rows actually removed in `deleted`. Retrying a deletion is safe and returns `deleted: 0` once the row is already absent.
 
 ## Development Tests
 

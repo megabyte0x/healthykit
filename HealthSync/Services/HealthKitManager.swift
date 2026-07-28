@@ -17,6 +17,7 @@ struct HealthKitFetchResult: Equatable {
 struct HealthKitIncrementalResult: Equatable {
     let fetchResult: HealthKitFetchResult
     let anchors: [HealthDataType: String]
+    let deletions: [HealthRecordDeletion]
 }
 
 private enum BackfillQuantityAggregationStrategy: String {
@@ -76,6 +77,7 @@ enum HealthKitManagerError: LocalizedError {
 final class HealthKitManager {
     private let healthStore: HKHealthStore
     private var observerQueries: [HKObserverQuery] = []
+    private var observerSampleTypes: [HKSampleType] = []
 
     init(healthStore: HKHealthStore = HKHealthStore()) {
         self.healthStore = healthStore
@@ -162,13 +164,14 @@ final class HealthKitManager {
         }
         var fetchResult = HealthKitFetchResult.empty
         var updatedAnchors: [HealthDataType: String] = [:]
+        var deletions: Set<HealthRecordDeletion> = []
 
         for type in types {
             guard let sampleType = HealthKitTypeRegistry.sampleType(for: type) else {
                 continue
             }
             let anchor = try anchors[type].flatMap(decodeAnchor)
-            let (samples, newAnchor) = try await anchoredSamples(type: sampleType, anchor: anchor)
+            let (samples, deletedObjects, newAnchor) = try await anchoredSamples(type: sampleType, anchor: anchor)
             guard let newAnchor else {
                 throw HealthKitManagerError.missingAnchor
             }
@@ -178,32 +181,68 @@ final class HealthKitManager {
             fetchResult.categorySamples += converted.categorySamples
             fetchResult.sleepSamples += converted.sleepSamples
             fetchResult.workoutSamples += converted.workoutSamples
+            deletions.formUnion(deletedObjects.map { HealthRecordDeletion.healthKit(uuid: $0.uuid, type: type) })
         }
 
-        return HealthKitIncrementalResult(fetchResult: fetchResult, anchors: updatedAnchors)
+        return HealthKitIncrementalResult(
+            fetchResult: fetchResult,
+            anchors: updatedAnchors,
+            deletions: deletions.sorted { ($0.kind.rawValue, $0.id) < ($1.kind.rawValue, $1.id) }
+        )
     }
 
-    func startObserverQueries(types: Set<HealthDataType>, onUpdate: @escaping @Sendable (HealthDataType) -> Void) throws {
+    func startObserverQueries(
+        types: Set<HealthDataType>,
+        frequency: SyncFrequency,
+        onUpdate: @escaping @Sendable (HealthDataType) async -> Void
+    ) async throws {
         guard isHealthDataAvailable else {
             throw HealthKitManagerError.healthDataUnavailable
         }
-        for query in observerQueries {
-            healthStore.stop(query)
-        }
-        observerQueries.removeAll()
+        await stopObserverQueries(disabling: Set(HealthDataType.allCases))
+        guard let updateFrequency = healthKitUpdateFrequency(for: frequency) else { return }
 
         for type in types {
             guard let sampleType = HealthKitTypeRegistry.sampleType(for: type) else { continue }
             let query = HKObserverQuery(sampleType: sampleType, predicate: nil) { _, completionHandler, error in
-                if error == nil {
-                    onUpdate(type)
+                guard error == nil else {
+                    completionHandler()
+                    return
                 }
-                completionHandler()
+                Task {
+                    await onUpdate(type)
+                    completionHandler()
+                }
             }
             healthStore.execute(query)
-            healthStore.enableBackgroundDelivery(for: sampleType, frequency: .hourly) { _, _ in }
-            observerQueries.append(query)
+            do {
+                try await enableBackgroundDelivery(for: sampleType, frequency: updateFrequency)
+                observerQueries.append(query)
+                observerSampleTypes.append(sampleType)
+            } catch {
+                healthStore.stop(query)
+                await stopObserverQueries(disabling: types)
+                throw error
+            }
         }
+    }
+
+    func stopObserverQueries(disabling types: Set<HealthDataType> = []) async {
+        for query in observerQueries {
+            healthStore.stop(query)
+        }
+        observerQueries.removeAll()
+        var backgroundTypes = observerSampleTypes
+        for type in types {
+            guard let sampleType = HealthKitTypeRegistry.sampleType(for: type) else { continue }
+            if !backgroundTypes.contains(sampleType) {
+                backgroundTypes.append(sampleType)
+            }
+        }
+        for sampleType in backgroundTypes {
+            await disableBackgroundDelivery(for: sampleType)
+        }
+        observerSampleTypes.removeAll()
     }
 
     private func quantitySamples(for type: HealthDataType, start: Date, end: Date) async throws -> [HealthQuantitySampleDTO] {
@@ -370,21 +409,60 @@ final class HealthKitManager {
         }
     }
 
-    private func anchoredSamples(type: HKSampleType, anchor: HKQueryAnchor?) async throws -> ([HKSample], HKQueryAnchor?) {
+    private func anchoredSamples(
+        type: HKSampleType,
+        anchor: HKQueryAnchor?
+    ) async throws -> ([HKSample], [HKDeletedObject], HKQueryAnchor?) {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(
                 type: type,
                 predicate: nil,
                 anchor: anchor,
                 limit: HKObjectQueryNoLimit
-            ) { _, samples, _, newAnchor, error in
+            ) { _, samples, deletedObjects, newAnchor, error in
                 if let error {
                     continuation.resume(throwing: HealthKitManagerError.map(error))
                 } else {
-                    continuation.resume(returning: (samples ?? [], newAnchor))
+                    continuation.resume(returning: (samples ?? [], deletedObjects ?? [], newAnchor))
                 }
             }
             healthStore.execute(query)
+        }
+    }
+
+    private func healthKitUpdateFrequency(for frequency: SyncFrequency) -> HKUpdateFrequency? {
+        switch frequency {
+        case .manualOnly:
+            nil
+        case .hourlyBestEffort:
+            .hourly
+        case .dailyBestEffort:
+            .daily
+        }
+    }
+
+    private func enableBackgroundDelivery(
+        for sampleType: HKSampleType,
+        frequency: HKUpdateFrequency
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            healthStore.enableBackgroundDelivery(for: sampleType, frequency: frequency) { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: HealthKitManagerError.healthDataUnavailable)
+                }
+            }
+        }
+    }
+
+    private func disableBackgroundDelivery(for sampleType: HKSampleType) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            healthStore.disableBackgroundDelivery(for: sampleType) { _, _ in
+                continuation.resume()
+            }
         }
     }
 

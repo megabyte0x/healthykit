@@ -206,7 +206,10 @@ final class HealthNormalizerTests: XCTestCase {
                     metadata: [:]
                 )
             ],
-            workouts: []
+            workouts: [],
+            deletions: [
+                HealthRecordDeletion(id: "healthkit:deleted-sample", kind: .metric)
+            ]
         )
 
         let json = try String(data: PayloadJSON.encoder.encode(payload), encoding: .utf8).unwrap()
@@ -215,8 +218,45 @@ final class HealthNormalizerTests: XCTestCase {
         XCTAssertTrue(json.contains("\"export_id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\""))
         XCTAssertTrue(json.contains("\"schema_version\":1"))
         XCTAssertTrue(json.contains("\"source_bundle_id\":\"com.apple.Health\""))
+        XCTAssertTrue(json.contains("\"deletions\":[{\"id\":\"healthkit:deleted-sample\",\"kind\":\"metric\"}]"))
         XCTAssertFalse(json.contains("deviceID"))
         XCTAssertFalse(json.contains("sourceBundleID"))
+    }
+
+    func testPayloadDecodingDefaultsMissingDeletionsForQueuedLegacyBatches() throws {
+        let legacyJSON = """
+        {
+          "device_id": "device-123",
+          "export_id": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+          "generated_at": "2023-11-14T22:13:20.000Z",
+          "timezone": "Asia/Kolkata",
+          "source": "ios-healthkit",
+          "schema_version": 1,
+          "date_range": {
+            "start": "2023-11-13T22:13:20.000Z",
+            "end": "2023-11-14T22:13:20.000Z"
+          },
+          "metrics": [],
+          "workouts": []
+        }
+        """
+
+        let payload = try PayloadJSON.decoder.decode(SyncPayload.self, from: Data(legacyJSON.utf8))
+
+        XCTAssertTrue(payload.deletions.isEmpty)
+    }
+
+    func testHealthKitDeletionMapsWorkoutsSeparatelyFromMetrics() {
+        let uuid = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+
+        XCTAssertEqual(
+            HealthRecordDeletion.healthKit(uuid: uuid, type: .stepCount),
+            HealthRecordDeletion(id: "healthkit:AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", kind: .metric)
+        )
+        XCTAssertEqual(
+            HealthRecordDeletion.healthKit(uuid: uuid, type: .workouts),
+            HealthRecordDeletion(id: "healthkit:AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", kind: .workout)
+        )
     }
 }
 
