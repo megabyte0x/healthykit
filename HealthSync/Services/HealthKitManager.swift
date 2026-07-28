@@ -74,6 +74,20 @@ enum HealthKitManagerError: LocalizedError {
     }
 }
 
+enum HealthKitReadErrorPolicy {
+    static func shouldSkipType(_ error: Error) -> Bool {
+        if let managerError = error as? HealthKitManagerError,
+           case .authorizationNotDetermined = managerError {
+            return true
+        }
+        if let healthKitError = error as? HKError,
+           healthKitError.code == .errorAuthorizationNotDetermined {
+            return true
+        }
+        return false
+    }
+}
+
 final class HealthKitManager {
     private let healthStore: HKHealthStore
     private var observerQueries: [HKObserverQuery] = []
@@ -112,17 +126,21 @@ final class HealthKitManager {
         var result = HealthKitFetchResult.empty
         for type in types {
             guard HealthKitTypeRegistry.objectType(for: type) != nil else { continue }
-            switch type {
-            case .sleepAnalysis:
-                result.sleepSamples += try await sleepSamples(start: start, end: end)
-            case .workouts:
-                result.workoutSamples += try await workoutSamples(start: start, end: end)
-            default:
-                if type.kind == .category {
-                    result.categorySamples += try await categorySamples(for: type, start: start, end: end)
-                } else {
-                    result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+            do {
+                switch type {
+                case .sleepAnalysis:
+                    result.sleepSamples += try await sleepSamples(start: start, end: end)
+                case .workouts:
+                    result.workoutSamples += try await workoutSamples(start: start, end: end)
+                default:
+                    if type.kind == .category {
+                        result.categorySamples += try await categorySamples(for: type, start: start, end: end)
+                    } else {
+                        result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                    }
                 }
+            } catch {
+                guard HealthKitReadErrorPolicy.shouldSkipType(error) else { throw error }
             }
         }
         return result
@@ -135,24 +153,28 @@ final class HealthKitManager {
         var result = HealthKitFetchResult.empty
         for type in types {
             guard HealthKitTypeRegistry.objectType(for: type) != nil else { continue }
-            switch type {
-            case .sleepAnalysis:
-                result.sleepSamples += try await sleepSamples(start: start, end: end)
-            case .workouts:
-                result.workoutSamples += try await workoutSamples(start: start, end: end)
-            default:
-                if type.kind == .category {
-                    result.categorySamples += try await categorySamples(for: type, start: start, end: end)
-                } else if let strategy = backfillAggregationStrategy(for: type) {
-                    result.quantitySamples += try await aggregatedQuantitySamples(
-                        for: type,
-                        start: start,
-                        end: end,
-                        strategy: strategy
-                    )
-                } else {
-                    result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+            do {
+                switch type {
+                case .sleepAnalysis:
+                    result.sleepSamples += try await sleepSamples(start: start, end: end)
+                case .workouts:
+                    result.workoutSamples += try await workoutSamples(start: start, end: end)
+                default:
+                    if type.kind == .category {
+                        result.categorySamples += try await categorySamples(for: type, start: start, end: end)
+                    } else if let strategy = backfillAggregationStrategy(for: type) {
+                        result.quantitySamples += try await aggregatedQuantitySamples(
+                            for: type,
+                            start: start,
+                            end: end,
+                            strategy: strategy
+                        )
+                    } else {
+                        result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                    }
                 }
+            } catch {
+                guard HealthKitReadErrorPolicy.shouldSkipType(error) else { throw error }
             }
         }
         return result
@@ -171,7 +193,15 @@ final class HealthKitManager {
                 continue
             }
             let anchor = try anchors[type].flatMap(decodeAnchor)
-            let (samples, deletedObjects, newAnchor) = try await anchoredSamples(type: sampleType, anchor: anchor)
+            let samples: [HKSample]
+            let deletedObjects: [HKDeletedObject]
+            let newAnchor: HKQueryAnchor?
+            do {
+                (samples, deletedObjects, newAnchor) = try await anchoredSamples(type: sampleType, anchor: anchor)
+            } catch {
+                guard HealthKitReadErrorPolicy.shouldSkipType(error) else { throw error }
+                continue
+            }
             guard let newAnchor else {
                 throw HealthKitManagerError.missingAnchor
             }
@@ -221,6 +251,9 @@ final class HealthKitManager {
                 observerSampleTypes.append(sampleType)
             } catch {
                 healthStore.stop(query)
+                if HealthKitReadErrorPolicy.shouldSkipType(error) {
+                    continue
+                }
                 await stopObserverQueries(disabling: types)
                 throw error
             }

@@ -275,6 +275,24 @@ final class HealthKitTypeRegistryTests: XCTestCase {
     }
 }
 
+final class HealthKitReadErrorPolicyTests: XCTestCase {
+    func testSkipsOnlyUndeterminedReadAuthorization() {
+        XCTAssertTrue(
+            HealthKitReadErrorPolicy.shouldSkipType(
+                HealthKitManagerError.authorizationNotDetermined
+            )
+        )
+        XCTAssertFalse(
+            HealthKitReadErrorPolicy.shouldSkipType(
+                HealthKitManagerError.healthDataUnavailable
+            )
+        )
+        XCTAssertFalse(
+            HealthKitReadErrorPolicy.shouldSkipType(APIClientError.invalidResponse)
+        )
+    }
+}
+
 final class HealthKitManagerErrorTests: XCTestCase {
     func testAuthorizationNotDeterminedMessageUsesNeutralPermissionAction() {
         XCTAssertEqual(
