@@ -600,3 +600,117 @@ def test_agent_daily_summary_uses_all_matching_samples_not_only_current_page(tmp
             "active_energy_kcal": 690.0,
         }
     ]
+
+
+def test_agent_daily_summary_prefers_daily_aggregate_over_overlapping_raw_samples(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    payload = sample_payload()
+    raw_template = {
+        **payload["metrics"][0],
+        "type": "dietary_protein",
+        "unit": "g",
+        "source_name": "MyFitnessPal",
+        "source_bundle_id": "com.myfitnesspal.mfp",
+        "metadata": {},
+    }
+    payload["metrics"] = [
+        {
+            **raw_template,
+            "id": "healthkit:meal-1",
+            "value": 20,
+            "start_at": "2026-05-31T08:00:00.000Z",
+            "end_at": "2026-05-31T08:05:00.000Z",
+        },
+        {
+            **raw_template,
+            "id": "healthkit:meal-2",
+            "value": 30,
+            "start_at": "2026-05-31T12:00:00.000Z",
+            "end_at": "2026-05-31T12:05:00.000Z",
+        },
+        {
+            **raw_template,
+            "id": "healthkit:aggregate:dietary_protein:2026-05-31",
+            "value": 50,
+            "start_at": "2026-05-30T18:30:00.000Z",
+            "end_at": "2026-05-31T18:30:00.000Z",
+            "source_name": "Apple Health",
+            "source_bundle_id": None,
+            "metadata": {"aggregation": "daily_sum", "aggregation_period": "day"},
+        },
+    ]
+
+    assert client.post("/api/apple-health/sync", headers=ingest_headers, json=payload).status_code == 200
+    response = client.get(
+        "/api/agent/health-data?type=dietary_protein",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["metric_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "type": "dietary_protein",
+            "unit": "g",
+            "sample_count": 1,
+            "total_value": 50.0,
+            "average_value": 50.0,
+            "minimum_value": 50.0,
+            "maximum_value": 50.0,
+        }
+    ]
+
+
+def test_agent_daily_summary_preserves_raw_samples_from_devices_without_an_aggregate(tmp_path: Path) -> None:
+    client = make_client(tmp_path, hosted=True)
+    provisioned = client.post("/api/hosted/workspaces", json={"label": "Personal Health"}).json()
+    ingest_headers = {"Authorization": f"Bearer {provisioned['ingest_token']}"}
+
+    first_device = sample_payload()
+    first_device["metrics"] = [
+        {
+            **first_device["metrics"][0],
+            "id": "healthkit:aggregate:dietary_protein:2026-05-31",
+            "type": "dietary_protein",
+            "value": 50,
+            "unit": "g",
+            "start_at": "2026-05-30T18:30:00.000Z",
+            "end_at": "2026-05-31T18:30:00.000Z",
+            "metadata": {"aggregation": "daily_sum", "aggregation_period": "day"},
+        }
+    ]
+    second_device = deepcopy(first_device)
+    second_device["device_id"] = "device-2"
+    second_device["export_id"] = "22222222-2222-4222-8222-222222222222"
+    second_device["metrics"] = [
+        {
+            **second_device["metrics"][0],
+            "id": "healthkit:device-2-meal",
+            "value": 10,
+            "metadata": {},
+        }
+    ]
+
+    assert client.post("/api/apple-health/sync", headers=ingest_headers, json=first_device).status_code == 200
+    assert client.post("/api/apple-health/sync", headers=ingest_headers, json=second_device).status_code == 200
+    response = client.get(
+        "/api/agent/health-data?type=dietary_protein",
+        headers={"Authorization": f"Bearer {provisioned['agent_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["metric_daily_summaries"] == [
+        {
+            "local_date": "2026-05-31",
+            "type": "dietary_protein",
+            "unit": "g",
+            "sample_count": 2,
+            "total_value": 60.0,
+            "average_value": 30.0,
+            "minimum_value": 10.0,
+            "maximum_value": 50.0,
+        }
+    ]

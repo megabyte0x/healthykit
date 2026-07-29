@@ -502,11 +502,24 @@ async function agentCatalog(workspaceId: string): Promise<Record<string, unknown
 }
 
 function summarizeMetrics(items: Record<string, unknown>[]): Record<string, unknown>[] {
-  const groups = new Map<string, number[]>();
+  const groupsByDevice = new Map<string, Record<string, unknown>[]>();
   for (const item of items) {
-    const key = `${item.local_date}\u0000${item.type}\u0000${item.unit}`;
+    const key = `${item.local_date}\u0000${item.type}\u0000${item.unit}\u0000${item.device_id}`;
+    const groupedItems = groupsByDevice.get(key) ?? [];
+    groupedItems.push(item);
+    groupsByDevice.set(key, groupedItems);
+  }
+
+  const groups = new Map<string, number[]>();
+  for (const [deviceKey, groupedItems] of groupsByDevice) {
+    const [localDate, type, unit] = deviceKey.split("\u0000");
+    const key = `${localDate}\u0000${type}\u0000${unit}`;
+    const dailyAggregates = groupedItems.filter((item) => {
+      const metadata = isRecord(item.metadata) ? item.metadata : {};
+      return metadata.aggregation === "daily_sum" || metadata.aggregation === "daily_average";
+    });
     const values = groups.get(key) ?? [];
-    values.push(Number(item.value));
+    values.push(...(dailyAggregates.length > 0 ? dailyAggregates : groupedItems).map((item) => Number(item.value)));
     groups.set(key, values);
   }
 

@@ -482,12 +482,23 @@ def get_agent_catalog(db: Session, workspace_id: str) -> AgentCatalog:
 
 
 def summarize_metric_items(items: list[HealthMetricOut]) -> list[MetricDailySummary]:
-    grouped: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    grouped_by_device: dict[tuple[str, str, str, str], list[HealthMetricOut]] = defaultdict(list)
     for item in items:
-        grouped[(item.local_date, item.type, item.unit)].append(item.value)
+        grouped_by_device[(item.local_date, item.type, item.unit, item.device_id)].append(item)
+
+    grouped_values: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    for (local_date, metric_type, unit, _), grouped_items in grouped_by_device.items():
+        daily_aggregates = [
+            item
+            for item in grouped_items
+            if item.metadata.get("aggregation") in {"daily_sum", "daily_average"}
+        ]
+        grouped_values[(local_date, metric_type, unit)].extend(
+            item.value for item in (daily_aggregates or grouped_items)
+        )
 
     summaries = []
-    for (local_date, metric_type, unit), values in sorted(grouped.items()):
+    for (local_date, metric_type, unit), values in sorted(grouped_values.items()):
         total = sum(values)
         summaries.append(
             MetricDailySummary(
