@@ -34,7 +34,7 @@ const troubleshootingItems = [
   {
     title: "Uploads keep retrying",
     body:
-      "Failed uploads stay queued locally for retry. Open Sync Logs, confirm the backend is healthy, then run a manual sync or backfill again."
+      "Failed uploads stay queued locally for the next HealthKit update, scheduled catch-up, app activation, or manual sync. Open Sync Logs and confirm the backend is healthy."
   },
   {
     title: "Hosted storage or agent credentials need refresh",

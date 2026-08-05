@@ -1,17 +1,15 @@
 {
-  "name": "healthsync-testflight-access",
+  "name": "healthsync-website",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "health": "node scripts/health-check.mjs",
-    "export:requests": "node scripts/export-testflight-requests.mjs --jsonl"
+    "health": "node scripts/health-check.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
-    "@vercel/blob": "2.4.0",
     "next": "16.2.7",
     "react": "19.2.7",
     "react-dom": "19.2.7"

@@ -125,9 +125,6 @@ nav a:focus-visible,
 .brand:focus-visible,
 .text-action:focus-visible,
 .inline-resource-link:focus-visible,
-.primary-action:focus-visible,
-input:focus-visible,
-select:focus-visible,
 summary:focus-visible {
   outline: 3px solid rgba(23, 131, 61, 0.24);
   outline-offset: 3px;
@@ -195,186 +192,6 @@ h1 {
 .text-action:hover,
 .inline-resource-link:hover {
   color: var(--green);
-}
-
-.hero-form {
-  margin-top: clamp(28px, 4vw, 40px);
-  max-width: 560px;
-  scroll-margin-top: calc(var(--header-height) + 22px);
-}
-
-.form-heading {
-  margin-bottom: 20px;
-}
-
-.form-heading h2 {
-  font-size: 1.35rem;
-  font-weight: 760;
-  line-height: 1.15;
-}
-
-.form-heading p {
-  color: var(--muted);
-  font-size: 0.98rem;
-  line-height: 1.45;
-  margin-top: 8px;
-}
-
-.access-form {
-  display: grid;
-  gap: 15px;
-}
-
-.field-group {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.bot-field {
-  height: 0;
-  left: -100vw;
-  overflow: hidden;
-  position: absolute;
-  top: auto;
-  width: 1px;
-}
-
-.field-group label {
-  font-size: 0.94rem;
-  font-weight: 690;
-}
-
-input,
-select {
-  appearance: none;
-  background: var(--background);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  min-height: 50px;
-  min-width: 0;
-  padding: 14px 16px;
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
-  width: 100%;
-}
-
-select {
-  background-image:
-    linear-gradient(45deg, transparent 50%, #202328 50%),
-    linear-gradient(135deg, #202328 50%, transparent 50%);
-  background-position:
-    calc(100% - 21px) 23px,
-    calc(100% - 15px) 23px;
-  background-repeat: no-repeat;
-  background-size: 6px 6px;
-  padding-right: 44px;
-}
-
-input::placeholder {
-  color: #9197a1;
-}
-
-input:hover,
-select:hover {
-  border-color: #aeb6c0;
-}
-
-[aria-invalid="true"] {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(238, 53, 83, 0.12);
-}
-
-.field-error {
-  color: #ce2340;
-  font-size: 0.85rem;
-  font-weight: 650;
-  line-height: 1.35;
-}
-
-.primary-action {
-  background: var(--green);
-  border: 0;
-  border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 1.05rem;
-  font-weight: 760;
-  min-height: 54px;
-  padding: 15px 20px;
-  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-}
-
-.primary-action:hover:not(:disabled) {
-  background: var(--green-dark);
-  box-shadow: 0 14px 30px rgba(23, 131, 61, 0.2);
-  transform: translateY(-1px);
-}
-
-.primary-action:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.form-note {
-  border-left: 3px solid var(--green);
-  color: var(--faint);
-  font-size: 0.88rem;
-  line-height: 1.45;
-  padding-left: 12px;
-}
-
-.status-message {
-  align-items: flex-start;
-  border-radius: 8px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 34px minmax(0, 1fr);
-  padding: 16px;
-}
-
-.status-message span {
-  align-items: center;
-  border-radius: 999px;
-  display: inline-flex;
-  font-size: 1rem;
-  font-weight: 800;
-  height: 34px;
-  justify-content: center;
-  width: 34px;
-}
-
-.status-message strong {
-  display: block;
-  font-size: 0.98rem;
-}
-
-.status-message p,
-.status-message small {
-  color: var(--muted);
-  display: block;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-}
-
-.success {
-  background: var(--green-soft);
-  color: var(--green);
-}
-
-.success span {
-  background: #ffffff;
-}
-
-.error {
-  background: var(--red-soft);
-  color: #ce2340;
-}
-
-.error span {
-  background: #ffffff;
 }
 
 .phone-stage {
@@ -1042,6 +859,13 @@ select:hover {
   max-width: 35rem;
 }
 
+.resource-meta {
+  color: var(--faint);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin-top: 18px;
+}
+
 .resource-list {
   align-self: start;
   border-top: 1px solid var(--border);
@@ -1174,6 +998,12 @@ select:hover {
   border-top: 1px solid var(--border);
   display: grid;
   margin-top: clamp(32px, 4.5vw, 54px);
+}
+
+.comparison-source {
+  display: block;
+  font-size: 0.84rem;
+  margin-top: 8px;
 }
 
 .comparison-row {
@@ -1336,14 +1166,6 @@ select:hover {
     align-items: flex-start;
     flex-direction: column;
     margin-top: 22px;
-  }
-
-  .hero-form {
-    margin-top: 34px;
-  }
-
-  .form-heading h2 {
-    font-size: 1.2rem;
   }
 
   .phone-stage {

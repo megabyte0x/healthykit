@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, APP_STORE_URL, ORGANIZATION_ID } from "@/lib/site";
 
 const pageTitle = "Apple Health Sync Alternatives for Private APIs";
 const pageDescription =
   "Compare HealthSync with common Apple Health sync and export options when you need HealthKit data in a private API or self-hosted backend.";
+const publishedAt = "2026-06-05T00:00:00.000Z";
+const modifiedAt = "2026-08-05T00:00:00.000Z";
 
 const comparisonRows = [
   {
@@ -12,28 +14,36 @@ const comparisonRows = [
     bestFor: "Sending selected Apple Health data from iPhone to a backend URL you control.",
     privateBackend: "Built in",
     appleHealth: "Native HealthKit reads",
-    notes: "Best fit for developers, quantified-self workflows, and private API ingestion."
+    notes: "Best fit for developers, quantified-self workflows, and private API ingestion.",
+    sourceLabel: "HealthSync on the App Store",
+    sourceUrl: APP_STORE_URL
   },
   {
     option: "Health Auto Export",
     bestFor: "Exporting Apple Health data into files, spreadsheets, automations, or supported integrations.",
-    privateBackend: "Integration-dependent",
+    privateBackend: "Configurable REST API automation",
     appleHealth: "Native app export flow",
-    notes: "A strong export tool, but not the same as a small self-hosted ingest backend."
+    notes: "Supports JSON or CSV REST API exports with configurable request headers.",
+    sourceLabel: "Health Auto Export REST API guide",
+    sourceUrl: "https://help.healthyapps.dev/en/health-auto-export/automations/rest-api/"
   },
   {
-    option: "Health Sync",
-    bestFor: "Moving fitness data between popular consumer health and activity services.",
-    privateBackend: "No",
-    appleHealth: "Consumer sync focus",
-    notes: "Useful for cross-service syncing, but the ranking result is a different app and brand."
+    option: "Health Webhook for iOS",
+    bestFor: "Forwarding selected Apple Health data to one or more webhook URLs.",
+    privateBackend: "Webhook endpoints",
+    appleHealth: "Native HealthKit reads",
+    notes: "Schedules syncs through iOS Shortcuts and supports multiple webhooks.",
+    sourceLabel: "Health Webhook for iOS product page",
+    sourceUrl: "https://hcwebhook.com/ios"
   },
   {
     option: "HealthKit XML export scripts",
     bestFor: "One-off analysis from the Apple Health export ZIP.",
     privateBackend: "No live sync",
     appleHealth: "Export ZIP parsing",
-    notes: "Good for historical analysis, not a recurring iPhone-to-API sync path."
+    notes: "Good for historical analysis, not a recurring iPhone-to-API sync path.",
+    sourceLabel: "Apple HealthKit documentation",
+    sourceUrl: "https://developer.apple.com/documentation/healthkit"
   }
 ];
 
@@ -57,6 +67,8 @@ export const metadata: Metadata = {
     url: "/apple-health-sync-alternatives",
     siteName: "HealthSync",
     type: "article",
+    publishedTime: publishedAt,
+    modifiedTime: modifiedAt,
     images: [
       {
         url: absoluteUrl("/healthsync-logo.png"),
@@ -75,6 +87,9 @@ const comparisonStructuredData = {
   description: pageDescription,
   url: absoluteUrl("/apple-health-sync-alternatives"),
   image: absoluteUrl("/healthsync-logo.png"),
+  datePublished: publishedAt,
+  dateModified: modifiedAt,
+  mainEntityOfPage: absoluteUrl("/apple-health-sync-alternatives"),
   about: [
     "Apple Health sync alternatives",
     "HealthKit data export",
@@ -87,16 +102,15 @@ const comparisonStructuredData = {
       "@type": "ListItem",
       position: index + 1,
       name: row.option,
-      description: row.bestFor
+      description: row.bestFor,
+      url: row.sourceUrl
     }))
   },
+  author: {
+    "@id": ORGANIZATION_ID
+  },
   publisher: {
-    "@type": "Organization",
-    name: "HealthSync",
-    logo: {
-      "@type": "ImageObject",
-      url: absoluteUrl("/healthsync-logo.png")
-    }
+    "@id": ORGANIZATION_ID
   }
 };
 
@@ -139,6 +153,9 @@ export default function AppleHealthSyncAlternativesPage() {
                 View source on GitHub
               </a>
             </div>
+            <p className="resource-meta">
+              Last reviewed August 5, 2026 · HealthSync is the product described on this page.
+            </p>
           </div>
 
           <div className="resource-proof" aria-label="HealthSync positioning">
@@ -185,7 +202,12 @@ export default function AppleHealthSyncAlternativesPage() {
                 <div role="cell" data-label="Best for">{row.bestFor}</div>
                 <div role="cell" data-label="Private backend">{row.privateBackend}</div>
                 <div role="cell" data-label="Apple Health access">{row.appleHealth}</div>
-                <div role="cell" data-label="Notes">{row.notes}</div>
+                <div role="cell" data-label="Notes">
+                  {row.notes}
+                  <a className="comparison-source" href={row.sourceUrl}>
+                    Source: {row.sourceLabel}
+                  </a>
+                </div>
               </div>
             ))}
           </div>
@@ -198,9 +220,9 @@ export default function AppleHealthSyncAlternativesPage() {
             <p className="resource-kicker">Private API fit</p>
             <h2 id="fit-title">Choose HealthSync when backend ownership is the point.</h2>
             <p className="resource-support">
-              If you only need a file export, a spreadsheet, or cross-service fitness sync, another
-              tool may be better. HealthSync is for users who want HealthKit data to land in their
-              own API with predictable payloads and local control.
+              If you only need a file export, spreadsheet, webhook automation, or cross-service
+              fitness sync, another tool may be better. HealthSync is for users who want HealthKit
+              data to land in their own API with predictable payloads and local control.
             </p>
           </div>
           <ul className="resource-list">
@@ -219,10 +241,15 @@ export default function AppleHealthSyncAlternativesPage() {
           </div>
           <div className="resource-copy">
             <p>
-              Search results for Apple Health sync include a different App Store app named
-              HealthSync and the appyhapps Health Sync product. This page uses the more precise
-              phrase <strong>Apple Health to private API</strong> so users can distinguish this
-              project from consumer fitness-sync products.
+              Search results for Apple Health sync include other products with similar names,
+              including <a href="https://healthsync.app/about/">Health Sync by appyhapps</a>. This
+              page uses the more precise phrase <strong>Apple Health to private API</strong> so users
+              can distinguish this project from consumer fitness-sync products.
+            </p>
+            <p>
+              Comparison details are based on the linked public product documentation and were
+              reviewed on August 5, 2026. Features and prices can change; check each product's
+              source before deciding.
             </p>
             <p>
               For implementation details, supported data types, and the HealthKit permission model,

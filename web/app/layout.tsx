@@ -1,7 +1,41 @@
 import type { Metadata } from "next";
-import { absoluteUrl, SITE_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
+import {
+  absoluteUrl,
+  APP_STORE_URL,
+  ORGANIZATION_ID,
+  SITE_NAME,
+  SITE_URL,
+  WEBSITE_ID
+} from "@/lib/site";
 import "./globals.css";
+
+const siteStructuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": ORGANIZATION_ID,
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/healthsync-logo.png")
+      },
+      sameAs: [APP_STORE_URL, "https://github.com/megabyte0x/healthykit"]
+    },
+    {
+      "@type": "WebSite",
+      "@id": WEBSITE_ID,
+      name: SITE_NAME,
+      url: SITE_URL,
+      inLanguage: "en",
+      publisher: {
+        "@id": ORGANIZATION_ID
+      }
+    }
+  ]
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -58,6 +92,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteStructuredData) }}
+        />
         {children}
         <Analytics />
       </body>

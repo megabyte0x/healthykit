@@ -2,6 +2,12 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const isVercelBuild = projectRoot.startsWith("/vercel/");
+const isDevelopment = process.env.NODE_ENV === "development";
+const scriptSource = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isDevelopment ? ["'unsafe-eval'"] : [])
+].join(" ");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -18,7 +24,7 @@ const nextConfig = {
               "form-action 'self'",
               "frame-ancestors 'none'",
               "img-src 'self' data: blob:",
-              "script-src 'self' 'unsafe-inline'",
+              `script-src ${scriptSource}`,
               "style-src 'self' 'unsafe-inline'",
               "connect-src 'self'",
               "font-src 'self' data:",

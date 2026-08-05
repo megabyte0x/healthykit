@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, APP_STORE_URL, ORGANIZATION_ID } from "@/lib/site";
 
 const pageTitle = "Apple Health App Sync for Private APIs";
 const pageDescription =
   "How HealthSync syncs selected Apple Health data from HealthKit on iPhone to a private backend API without giving this website access to health data.";
+const publishedAt = "2026-06-05T00:00:00.000Z";
+const modifiedAt = "2026-08-05T00:00:00.000Z";
 
 const syncedTypes = [
   "Steps and activity energy",
@@ -35,6 +37,8 @@ export const metadata: Metadata = {
     url: "/apple-health-app-sync",
     siteName: "HealthSync",
     type: "article",
+    publishedTime: publishedAt,
+    modifiedTime: modifiedAt,
     images: [
       {
         url: absoluteUrl("/healthsync-logo.png"),
@@ -53,14 +57,15 @@ const articleStructuredData = {
   description: pageDescription,
   url: absoluteUrl("/apple-health-app-sync"),
   image: absoluteUrl("/healthsync-logo.png"),
+  datePublished: publishedAt,
+  dateModified: modifiedAt,
+  mainEntityOfPage: absoluteUrl("/apple-health-app-sync"),
   about: ["Apple Health app sync", "HealthKit", "private health data APIs", "self-hosted health data"],
+  author: {
+    "@id": ORGANIZATION_ID
+  },
   publisher: {
-    "@type": "Organization",
-    name: "HealthSync",
-    logo: {
-      "@type": "ImageObject",
-      url: absoluteUrl("/healthsync-logo.png")
-    }
+    "@id": ORGANIZATION_ID
   }
 };
 
@@ -78,7 +83,7 @@ export default function AppleHealthAppSyncPage() {
           <span>HealthSync</span>
         </a>
         <nav aria-label="Page">
-          <a href="/">Request access</a>
+          <a href={APP_STORE_URL}>App Store</a>
           <a href="#how-it-works">How it works</a>
           <a href="/privacy">Privacy</a>
           <a href="/support">Support</a>
@@ -97,11 +102,15 @@ export default function AppleHealthAppSyncPage() {
               uploads queued JSON batches to a backend API you configure.
             </p>
             <div className="resource-actions">
-              <a className="resource-button" href="/#request-access">Request TestFlight access</a>
+              <a className="resource-button" href={APP_STORE_URL}>View on the App Store</a>
               <a className="resource-text-link" href="https://github.com/megabyte0x/healthykit">
                 View the GitHub repo
               </a>
             </div>
+            <p className="resource-meta">
+              Published June 5, 2026 · Last reviewed August 5, 2026 · HealthSync product
+              documentation
+            </p>
           </div>
 
           <div className="resource-proof" aria-label="HealthSync sync summary">
@@ -121,7 +130,7 @@ export default function AppleHealthAppSyncPage() {
               </div>
               <div>
                 <dt>Mode</dt>
-                <dd>Manual sync, backfill, and queued retry</dd>
+                <dd>Automatic changes, scheduled catch-up, manual backfill</dd>
               </div>
             </dl>
           </div>
@@ -137,8 +146,8 @@ export default function AppleHealthAppSyncPage() {
           <div className="resource-copy">
             <p>
               Apple Health access runs through HealthKit on the iPhone after the user grants
-              permission. The HealthSync website only collects TestFlight access requests; the iOS app
-              handles HealthKit authorization, selected data type toggles, local persistence, and sync.
+              permission. HealthSync handles HealthKit authorization, selected data type toggles,
+              local persistence, and sync inside the iOS app.
             </p>
             <p>
               Apple describes HealthKit as the central store for health and fitness data on iPhone and
@@ -197,12 +206,12 @@ export default function AppleHealthAppSyncPage() {
 
       <section className="resource-cta" aria-labelledby="cta-title">
         <div className="resource-shell">
-          <h2 id="cta-title">Try HealthSync through TestFlight.</h2>
+          <h2 id="cta-title">Download HealthSync from the App Store.</h2>
           <p>
-            Request access if you want to test Apple Health app sync with your own private API
-            endpoint.
+            Install HealthSync on your iPhone to sync selected Apple Health data with your own
+            private API endpoint.
           </p>
-          <a className="resource-button" href="/#request-access">Request access</a>
+          <a className="resource-button" href={APP_STORE_URL}>View on the App Store</a>
         </div>
       </section>
 

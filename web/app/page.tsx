@@ -1,6 +1,5 @@
 import Image from "next/image";
-import { AccessRequestForm } from "@/components/access-request-form";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, APP_STORE_URL, ORGANIZATION_ID } from "@/lib/site";
 
 const previewRows = [
   {
@@ -31,14 +30,14 @@ const previewRows = [
 
 const privacyDetails = [
   {
-    title: "Access and support only",
-    body: "We collect your name, email, and iOS device only to manage access requests and HealthSync communication.",
-    icon: "person"
-  },
-  {
-    title: "No health data here",
+    title: "No website health data",
     body: "This website never reads, stores, or has access to your Apple Health data.",
     icon: "lock"
+  },
+  {
+    title: "Control stays with you",
+    body: "HealthSync asks for HealthKit permission only inside the iPhone app, for the data types you choose.",
+    icon: "shield"
   },
   {
     title: "Clear privacy policy",
@@ -55,7 +54,7 @@ const syncDetails = [
   },
   {
     title: "Private API endpoint",
-    body: "Upload selected metrics and workouts to a backend URL you configure, with queued retries for network failures.",
+    body: "Automatically upload selected changes to your configured backend, with scheduled catch-up and queued retries for network failures.",
     icon: "lock"
   },
   {
@@ -67,66 +66,89 @@ const syncDetails = [
 
 const nextSteps = [
   {
-    title: "Check your email",
-    body: "We will review the request and send install instructions when beta access is available.",
-    icon: "mail"
+    title: "Download HealthSync",
+    body: "Open the App Store on your iPhone and install HealthSync for free.",
+    icon: "download"
   },
   {
-    title: "Install via TestFlight",
-    body: "Open the invite on your iOS device and install HealthSync through Apple's TestFlight app.",
-    icon: "testflight"
+    title: "Choose your setup",
+    body: "Use the default hosted destination or connect your own private backend.",
+    icon: "lock"
   },
   {
-    title: "Share feedback",
-    body: "Try the sync flow, then tell us what should be clearer before launch.",
-    icon: "message"
+    title: "Select and sync",
+    body: "Choose the Apple Health data you want to share, then let HealthSync keep it up to date.",
+    icon: "check"
   }
 ];
 
-const homeStructuredData = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "HealthSync",
-  applicationCategory: "HealthApplication",
-  operatingSystem: "iOS",
-  url: absoluteUrl("/"),
-  description:
-    "Privacy-first iOS app for syncing selected Apple Health data from HealthKit to a private backend API.",
-  image: absoluteUrl("/healthsync-logo.png"),
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-    availability: "https://schema.org/PreOrder"
-  },
-  featureList: [
-    "Apple Health app sync through HealthKit",
-    "Private REST backend uploads",
-    "Selected HealthKit data type toggles",
-    "Queued retry for failed sync batches",
-    "No website access to Apple Health data"
-  ],
-  sameAs: ["https://github.com/megabyte0x/healthykit"]
-};
-
 const faqItems = [
   {
-    question: "Do I need TestFlight installed?",
-    answer: "Yes. Approved testers install HealthSync through Apple TestFlight on the iOS device they submit."
+    question: "Where can I download HealthSync?",
+    answer: "HealthSync is available from the App Store for iPhone."
   },
   {
     question: "Will this website read my Apple Health data?",
-    answer: "No. This website only collects TestFlight access details. Apple Health permissions are handled inside the iOS app."
+    answer: "No. Apple Health permissions are handled inside the iOS app, and this website never reads or stores your Apple Health data."
   },
   {
-    question: "When will I get access?",
-    answer: "Requests are reviewed manually. If approved, install instructions are sent to the email address you provide."
+    question: "Is HealthSync free?",
+    answer: "Yes. HealthSync is free to download from the App Store."
   },
   {
     question: "Can I choose what HealthSync syncs?",
     answer: "Yes. HealthSync lets you choose the health data types and sync timing from inside the iOS app."
   }
 ];
+
+const homeStructuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": absoluteUrl("/#software-application"),
+      name: "HealthSync",
+      applicationCategory: "HealthApplication",
+      applicationSubCategory: "Health data synchronization",
+      operatingSystem: "iOS",
+      url: absoluteUrl("/"),
+      description:
+        "Privacy-first iOS app for syncing selected Apple Health data from HealthKit to a private backend API.",
+      image: absoluteUrl("/healthsync-logo.png"),
+      author: {
+        "@id": ORGANIZATION_ID
+      },
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+        url: APP_STORE_URL
+      },
+      featureList: [
+        "Apple Health app sync through HealthKit",
+        "Private REST backend uploads",
+        "Selected HealthKit data type toggles",
+        "Automatic HealthKit change delivery and scheduled catch-up",
+        "Queued retry for failed sync batches",
+        "No website access to Apple Health data"
+      ],
+      sameAs: [APP_STORE_URL, "https://github.com/megabyte0x/healthykit"]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": absoluteUrl("/#faq"),
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer
+        }
+      }))
+    }
+  ]
+};
 
 function Icon({ name }: { name: string }) {
   if (name === "check") {
@@ -164,15 +186,6 @@ function Icon({ name }: { name: string }) {
     );
   }
 
-  if (name === "person") {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <circle cx="12" cy="8" r="3.4" />
-        <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
-      </svg>
-    );
-  }
-
   if (name === "lock") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -192,22 +205,12 @@ function Icon({ name }: { name: string }) {
     );
   }
 
-  if (name === "mail") {
+  if (name === "download") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24">
-        <rect width="16" height="12" x="4" y="6" rx="2" />
-        <path d="m5 7.5 7 5.4 7-5.4" />
-      </svg>
-    );
-  }
-
-  if (name === "testflight") {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <rect width="14" height="14" x="5" y="5" rx="4" />
-        <path d="m12 8.2-3.4 7" />
-        <path d="m12 8.2 3.4 7" />
-        <path d="M8.6 15.2h6.8" />
+        <path d="M12 3.5v10.2" />
+        <path d="m8.1 10.2 3.9 3.9 3.9-3.9" />
+        <path d="M5.2 17.5v2.8h13.6v-2.8" />
       </svg>
     );
   }
@@ -291,7 +294,7 @@ export default function Home() {
           <a href="/privacy">Privacy</a>
           <a href="/support">Support</a>
           <a href="#faq">FAQ</a>
-          <a className="nav-action" href="#request-access">Request access</a>
+          <a className="nav-action" href={APP_STORE_URL}>View on the App Store</a>
         </nav>
       </header>
 
@@ -300,21 +303,14 @@ export default function Home() {
           <div className="hero-copy">
             <h1 id="hero-title">Apple Health app sync for your own backend</h1>
             <p className="lede">
-              Request TestFlight access to HealthSync, the iOS app that syncs selected
-              HealthKit data to a private API endpoint on your terms.
+              HealthSync is the iOS app that syncs selected HealthKit data to a private API
+              endpoint on your terms.
             </p>
             <div className="hero-links" aria-label="Primary actions">
-              <a className="text-action" href="#request-access">Join the TestFlight list</a>
+              <a className="text-action" href={APP_STORE_URL}>View on the App Store</a>
               <a className="text-action secondary" href="/apple-health-app-sync">
                 Read the Apple Health sync guide
               </a>
-            </div>
-            <div className="hero-form" id="request-access" aria-labelledby="request-form-title">
-              <div className="form-heading">
-                <h2 id="request-form-title">Join the TestFlight list</h2>
-                <p>We review requests manually and send install instructions by email.</p>
-              </div>
-              <AccessRequestForm />
             </div>
           </div>
 
@@ -360,11 +356,10 @@ export default function Home() {
               <Icon name="lock" />
               <span>Privacy</span>
             </div>
-            <h2 id="privacy-title">Privacy, built into the request.</h2>
+            <h2 id="privacy-title">Privacy, built into the app.</h2>
             <p>
-              We collect only what is needed to manage HealthSync access and support: your name,
-              email, and iOS device. We never read or access your Apple Health data from this
-              website.
+              Your Apple Health data stays on your iPhone until you choose to sync it from inside
+              HealthSync. This website never reads or accesses it.
             </p>
             <div className="privacy-note">
               <Icon name="shield" />
@@ -391,10 +386,10 @@ export default function Home() {
         <div className="section-shell process-grid">
           <div className="section-lede compact">
             <div className="section-label">
-              <Icon name="testflight" />
-              <span>What happens next</span>
+              <Icon name="download" />
+              <span>Get started</span>
             </div>
-            <h2 id="next-title">What happens next</h2>
+            <h2 id="next-title">Get started with HealthSync.</h2>
           </div>
 
           <div className="steps">
@@ -420,7 +415,7 @@ export default function Home() {
               <span>FAQ</span>
             </div>
             <h2 id="faq-title">Frequently asked questions</h2>
-            <p>Everything you need to know about requests, privacy, and the beta.</p>
+            <p>Everything you need to know about the app, privacy, and Apple Health sync.</p>
           </div>
 
           <div className="faq-list">

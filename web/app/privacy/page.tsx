@@ -16,7 +16,7 @@ const summaryItems = [
   {
     term: "Sync destination",
     detail:
-      "Health data leaves the device only after you accept the default private hosted destination or configure your own backend and start a sync."
+      "Health data leaves the device only after you accept the default private hosted destination or configure your own backend, grant Health permission, and enable automatic or manual sync."
   },
   {
     term: "Tokens",
@@ -26,7 +26,7 @@ const summaryItems = [
   {
     term: "Website data",
     detail:
-      "The website stores access-request and support contact details. It does not read Apple Health data."
+      "The website does not collect Apple Health data or personal details. Support messages are sent by email only when you choose to contact us."
   }
 ];
 
@@ -35,14 +35,14 @@ const collectedItems = [
   "A stable local device identifier, selected data-type settings, HealthKit sync anchors, queued upload batches, sync logs, and app settings stored locally by the iOS app.",
   "Backend URL and auth tokens that you enter or receive from hosted HealthSync setup. Tokens are stored in Keychain on the device.",
   "Hosted HealthSync workspace data when you choose hosted storage, including workspace-scoped metrics, workouts, sync batch metadata, token hashes, and private read-only agent endpoint information.",
-  "Website access-request or support details such as name, email address, iOS device, and message content when you submit them."
+  "Support messages and contact details that you choose to send by email."
 ];
 
 const useItems = [
   "To sync selected Apple Health data to the backend destination you choose.",
   "To retry failed uploads, deduplicate HealthKit records, and show sync status inside the app.",
   "To provision hosted HealthSync storage and private read-only agent credentials when you continue with the default hosted mode.",
-  "To respond to support requests, manage access requests, and send product communication related to HealthSync."
+  "To respond to support requests that you choose to send by email."
 ];
 
 const controlItems = [
@@ -217,8 +217,8 @@ export default function PrivacyPage() {
               endpoints.
             </p>
             <p>
-              Website access requests and support messages may be stored in private production
-              storage or sent to the configured support workflow so we can respond.
+              Support messages you choose to send by email may be stored in the mail service or
+              support workflow used to respond.
             </p>
           </div>
         </div>
