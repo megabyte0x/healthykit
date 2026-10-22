@@ -1,4 +1,5 @@
 import XCTest
+import HealthKit
 @testable import HealthSync
 
 final actor SyncEngineTestsStore: BatchPersisting {
@@ -376,6 +377,11 @@ final class BackfillSyncTests: XCTestCase {
         XCTAssertFalse(BackfillSync.shouldUpload(payload))
     }
 
+    func testBusyUploaderDoesNotAcknowledgeAnUnuploadedPage() {
+        XCTAssertThrowsError(try BackfillSync.validateUpload(.empty))
+        XCTAssertNoThrow(try BackfillSync.validateUpload(SyncRunResult(uploadedCount: 1, failedCount: 0, messages: [])))
+    }
+
     func testBackfillUploadFailureThrowsInsteadOfAllowingSuccess() {
         let result = SyncRunResult(
             uploadedCount: 0,
@@ -682,5 +688,50 @@ final class IncrementalMaintenanceTests: XCTestCase {
         let nextDay = await uploader.payloads
         XCTAssertEqual(nextDay.count, 2)
         XCTAssertNotEqual(nextDay[0].exportID, nextDay[1].exportID)
+    }
+}
+
+
+final class PagedBackfillQueueTests: XCTestCase {
+    func testFailedRawPageIsDurableAndStopsReadingUntilRetry() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("backfill.sqlite")
+        let store = try SQLiteLocalStore(url: url)
+        let engine = SyncEngine(store: store, uploader: FailingUploader())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(60)
+        let samples = (0..<100).map { _ in
+            HKQuantitySample(type: HKQuantityType(.oxygenSaturation), quantity: HKQuantity(unit: .percent(), doubleValue: 0.97), start: start, end: start)
+        }
+        var reads = 0
+        let manager = HealthKitManager(backfillPageReader: { _, _, _, _ in
+            reads += 1
+            return .init(samples: samples, deletedCount: 0, anchor: HKQueryAnchor(fromValue: reads))
+        })
+        let configuration = UploadConfiguration(baseURL: "https://example.com", token: "fixture-token", deviceID: "fixture", appVersion: "1.0")
+        do {
+            try await manager.forEachBackfillBatch(types: [.oxygenSaturation], start: start, end: end, mode: .rawSamples) { page in
+                let payload = try HealthNormalizer().payload(deviceID: "fixture", dateRange: SyncDateRange(start: start, end: end), timezone: "UTC",
+                    quantitySamples: page.quantitySamples, sleepSamples: [], workoutSamples: [])
+                for upload in BackfillSync.uploadPayloads(for: payload) {
+                    let queued = try await engine.queue(payload: upload)
+                    try BackfillSync.validateUpload(await engine.uploadQueuedBatch(queued, configuration: configuration))
+                }
+            }
+            XCTFail("Failed upload must stop pagination")
+        } catch { XCTAssertTrue(error is BackfillSyncError) }
+        XCTAssertEqual(reads, 1)
+        let reopened = try SQLiteLocalStore(url: url)
+        let pending = try await reopened.pendingBatches()
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending[0].payload.metrics.count, 100)
+        XCTAssertEqual(Set(pending[0].payload.metrics.map(\.id)), Set(samples.map { "healthkit:\($0.uuid.uuidString)" }))
+        let retry = SyncEngine(store: reopened, uploader: SucceedingUploader())
+        let result = await retry.uploadPending(configuration: configuration)
+        XCTAssertEqual(result.uploadedCount, 1)
+        let remaining = try await reopened.pendingBatches()
+        XCTAssertTrue(remaining.isEmpty)
     }
 }
