@@ -162,16 +162,19 @@ class SyncBatchOut(BaseModel):
 
 
 class MetricListResponse(BaseModel):
+    workspace_id: str
     items: list[HealthMetricOut]
     page: PageInfo
 
 
 class WorkoutListResponse(BaseModel):
+    workspace_id: str
     items: list[HealthWorkoutOut]
     page: PageInfo
 
 
 class SyncBatchListResponse(BaseModel):
+    workspace_id: str
     items: list[SyncBatchOut]
     page: PageInfo
 
