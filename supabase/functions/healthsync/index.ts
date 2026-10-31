@@ -380,7 +380,7 @@ async function agentList(req: Request, url: URL, table: string): Promise<Respons
   const auth = await requireToken(req, "agent_read");
   const result = await listRows(table, auth.workspaceId, url, readRange(url));
   const items = table === "sync_batches" ? result.items.map(syncRowToAgent) : await enrichRows(result.items, table);
-  return json({ items, page: result.page });
+  return json({ workspace_id: auth.workspaceId, items, page: result.page });
 }
 
 async function listRows(
@@ -398,6 +398,8 @@ async function listRows(
     .select("*")
     .eq("workspace_id", workspaceId)
     .order(orderColumn, { ascending: false });
+  // Tiebreak on the primary key so offset pages never skip or repeat rows that share a timestamp.
+  query = table === "sync_batches" ? query.order("export_id") : query.order("device_id").order("id");
 
   if (table === "health_metrics" && url.searchParams.has("type")) {
     query = query.eq("type", url.searchParams.get("type") ?? "");
