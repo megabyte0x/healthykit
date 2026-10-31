@@ -177,7 +177,7 @@ The agent response includes raw records plus digest fields designed for AI tools
 - `metric_daily_summaries`
 - `workout_daily_summaries`
 
-`/api/agent/metrics`, `/api/agent/workouts`, and `/api/agent/syncs` return `workspace_id`, `items`, and `page`. Every agent response carries the token-derived `workspace_id`, including empty pages. `limit` (1–500, default 100) is applied in the query before records are enriched with `timezone` and `local_date`. Lists are ordered newest first with ties broken by record identity, so offset paging is stable; still deduplicate imports on `device_id` and `id`. On `/api/agent/health-data`, `type` filters only metrics, so use `/api/agent/metrics?type=...` (one exact snake_case type per request, such as `resting_heart_rate`) to import selected metric types.
+`/api/agent/metrics`, `/workouts`, and `/syncs` return `workspace_id`, `items`, and `page`. Results are sorted newest first in a stable order. To fetch only some metric types, call `/api/agent/metrics?type=...` once per type.
 
 The database also exposes read-only SQL views for internal agent/reporting queries:
 
