@@ -16,3 +16,15 @@ Run the synthetic tests from the repository root after installing both backend a
 ```sh
 python -m pytest -q Tests/backend cloudrun/health-sync-api
 ```
+
+## Gateway and OAuth discovery
+
+Use a public HTTPS hostname that can forward the OAuth discovery paths to the container. For a root deployment, forward the root paths unchanged, including `/mcp`, `/auth/callback`, and `/.well-known/*`. For a prefix such as `/health`, strip that prefix before forwarding application requests. Forward the root RFC 8414 discovery path `/.well-known/oauth-authorization-server/health` unchanged if the client uses it. The MCP challenge advertises the protected-resource discovery URL under the configured public prefix. Check the advertised metadata URLs from outside the network before connecting a client. If the gateway reserves the root discovery paths, use a reverse proxy or hostname where you control these routes.
+
+`CASDOOR_ISSUER` must be the HTTPS origin of Casdoor with no path. The backend obtains signing keys from its `/.well-known/jwks` endpoint. Keep the public URL and callback aligned, including any prefix. Store all secrets in the container's runtime environment and retain the signing and encryption keys across upgrades to preserve OAuth sessions.
+
+## Client and deployment checks
+
+In HealthSync, select **My own backend**, enter the public service base URL, and use the upload token. Run a sync, then use the read token on an agent endpoint or sign in through MCP with the allowed Casdoor account. Confirm that the sample timestamps and counts match the synthetic upload. For an MCP request without credentials, check for HTTP 401 and a `WWW-Authenticate` challenge.
+
+Keep database migrations scoped to the CloudBase SQL files listed above. Use a previous container revision to roll back the application and retain the existing database and OAuth state.
