@@ -14,7 +14,7 @@
   },
   "vars": {
     "HOSTED_PUBLIC_BASE_URL": "https://api.healthysync.app",
-    "MIGRATION_STATE": "locked"
+    "MIGRATION_STATE": "active"
   },
   "d1_databases": [
     {
