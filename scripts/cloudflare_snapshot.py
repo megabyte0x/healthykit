@@ -137,16 +137,17 @@ def write_private_json(path, value):
             os.unlink(temporary)
 
 
-def database_tables(connection):
+def database_tables(connection, allow_managed=False):
+    managed = {"_cf_METADATA", "d1_migrations"} if allow_managed else set()
     tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
-              if not row[0].startswith("sqlite_")]
+              if not row[0].startswith("sqlite_") and row[0] not in managed]
     if any(table not in PRIMARY_KEYS for table in tables):
         raise ValueError("Unsupported database table")
     return tables
 
 
-def validate_database(connection):
-    if set(database_tables(connection)) != set(PRIMARY_KEYS):
+def validate_database(connection, allow_managed=False):
+    if set(database_tables(connection, allow_managed=allow_managed)) != set(PRIMARY_KEYS):
         raise ValueError("Database must contain exactly the seven supported tables")
     for table, primary_key in PRIMARY_KEYS.items():
         columns = connection.execute(f'PRAGMA table_info("{table}")').fetchall()
@@ -208,8 +209,8 @@ def sqlite_export(database_path, output_path):
     connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
     try:
         connection.execute("BEGIN")
-        validate_database(connection)
-        if connection.execute("PRAGMA foreign_key_check").fetchone():
+        validate_database(connection, allow_managed=True)
+        if any(connection.execute(f'PRAGMA foreign_key_check("{table}")').fetchone() for table in PRIMARY_KEYS):
             raise ValueError("Database foreign key validation failed")
         tables = {}
         for table in PRIMARY_KEYS:

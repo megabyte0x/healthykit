@@ -323,6 +323,34 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             snapshot.sqlite_export(self.database, self.root / "export.json")
 
+    def test_export_ignores_exact_managed_d1_tables(self):
+        snapshot.sqlite_import(self.source, self.database, self.schema)
+        with sqlite3.connect(self.database) as connection:
+            for table in ("_cf_METADATA", "d1_migrations"):
+                connection.execute(f'CREATE TABLE "{table}" (managed TEXT REFERENCES managed_missing(id))')
+                connection.execute(f'INSERT INTO "{table}" VALUES (?)', ("synthetic managed state",))
+        output = self.root / "export.json"
+        snapshot.sqlite_export(self.database, output)
+        self.assertEqual(json.loads(output.read_text()), snapshot.canonical_snapshot(fixture()))
+
+    def test_managed_d1_tables_are_not_allowed_in_import_or_as_lookalikes(self):
+        for table in ("_cf_METADATA", "d1_migrations", "_cf_METADATA_extra", "d1_migrations_extra"):
+            with self.subTest(table=table):
+                database = self.root / (table + ".sqlite")
+                with sqlite3.connect(database) as connection:
+                    connection.execute(f'CREATE TABLE "{table}" (managed TEXT)')
+                with self.assertRaises(ValueError):
+                    snapshot.sqlite_import(self.source, database, self.schema)
+        snapshot.sqlite_import(self.source, self.database, self.schema)
+        for table in ("_cf_METADATA_extra", "d1_migrations_extra"):
+            with self.subTest(table=table):
+                with sqlite3.connect(self.database) as connection:
+                    connection.execute(f'CREATE TABLE "{table}" (managed TEXT)')
+                with self.assertRaises(ValueError):
+                    snapshot.sqlite_export(self.database, self.root / "export.json")
+                with sqlite3.connect(self.database) as connection:
+                    connection.execute(f'DROP TABLE "{table}"')
+
 
 if __name__ == "__main__":
     unittest.main()
