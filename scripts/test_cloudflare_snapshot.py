@@ -123,6 +123,27 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(result["health_workouts"][0]["total_energy_kcal"])
         self.assertEqual([r["workspace_id"] for r in result["health_metrics"]], ["a", "b"])
 
+    def test_canonical_accepts_variable_fractional_timestamp_precision(self):
+        data = fixture()
+        result_row = data["tables"]["workspaces"][1]
+        for digits in range(1, 7):
+            fraction = "123456"[:digits]
+            micros = fraction.ljust(6, "0")
+            for offset, hour, minute in (("Z", "19", "00"), ("+05:30", "13", "30")):
+                with self.subTest(digits=digits, offset=offset):
+                    result_row["created_at"] = f"2026-11-07T19:00:00.{fraction}{offset}"
+                    canonical = snapshot.canonical_snapshot(data)
+                    self.assertEqual(canonical["tables"]["workspaces"][0]["created_at"],
+                                     f"2026-11-07T{hour}:{minute}:00.{micros}Z")
+        result_row["created_at"] = None
+        self.assertIsNone(snapshot.canonical_snapshot(data)["tables"]["workspaces"][0]["created_at"])
+
+    def test_rejects_invalid_timestamp_dates(self):
+        data = fixture()
+        data["tables"]["workspaces"][0]["created_at"] = "2026-02-30T19:00:00.1Z"
+        with self.assertRaises(ValueError):
+            snapshot.canonical_snapshot(data)
+
     def test_manifest_only_counts_and_digests(self):
         manifest = snapshot.create_manifest(fixture())
         self.assertEqual(set(manifest), {"tables"})

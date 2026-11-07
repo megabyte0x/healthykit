@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sqlite3
 import sys
 import tempfile
@@ -72,7 +73,12 @@ def canonical_snapshot(data):
                 if column in TIMESTAMPS and value is not None:
                     if not isinstance(value, str):
                         raise ValueError("Invalid timestamp")
-                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    normalized = re.sub(
+                        r"\.(\d{1,5})(?=(?:Z|[+-]\d{2}:\d{2})$)",
+                        lambda match: "." + match.group(1).ljust(6, "0"),
+                        value,
+                    )
+                    parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
                     if parsed.tzinfo is None or parsed.utcoffset() is None:
                         raise ValueError("Timestamp must include a timezone")
                     value = parsed.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
