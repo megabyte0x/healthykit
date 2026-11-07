@@ -53,7 +53,7 @@ enum StorageMode: String, CaseIterable, Codable, Identifiable {
 }
 
 struct AppSettings: Codable, Equatable {
-    static let hostedBackendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+    static let hostedBackendURL = "https://api.healthysync.app"
 
     var backendURL: String
     var selectedTypes: Set<HealthDataType>
