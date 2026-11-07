@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -188,6 +189,29 @@ class SnapshotTests(unittest.TestCase):
         output = self.root / "export.json"
         snapshot.sqlite_export(self.database, output)
         self.assertEqual(json.loads(output.read_text(encoding="utf-8")), snapshot.canonical_snapshot(data))
+
+    def test_signed_zero_float_columns_round_trip_without_changing_metadata(self):
+        data = fixture()
+        for row in data["tables"]["health_metrics"]:
+            row["value"] = -0.0
+            row["metadata"] = {"signed_zero": -0.0}
+        for row in data["tables"]["health_workouts"]:
+            for column in ("duration_seconds", "total_energy_kcal", "active_energy_kcal", "distance_meters"):
+                row[column] = -0.0
+        self.write_source(data)
+        snapshot.sqlite_import(self.source, self.database, self.schema)
+        output = self.root / "export.json"
+        snapshot.sqlite_export(self.database, output)
+        result = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(snapshot.create_manifest(result), snapshot.create_manifest(data))
+        canonical = snapshot.canonical_snapshot(data)
+        for table, columns in (("health_metrics", ("value",)),
+                               ("health_workouts", ("duration_seconds", "total_energy_kcal", "active_energy_kcal", "distance_meters"))):
+            for row in canonical["tables"][table]:
+                for column in columns:
+                    self.assertEqual(math.copysign(1.0, row[column]), 1.0)
+        for row in result["tables"]["health_metrics"]:
+            self.assertEqual(math.copysign(1.0, row["metadata"]["signed_zero"]), -1.0)
 
     def test_empty_snapshot_round_trips(self):
         data = {"tables": {table: [] for table in fixture()["tables"]}}

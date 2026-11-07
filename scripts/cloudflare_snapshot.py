@@ -82,6 +82,8 @@ def canonical_snapshot(data):
                     value = float(value)
                     if not math.isfinite(value):
                         raise ValueError("Nonfinite numeric value")
+                    if value == 0:
+                        value = 0.0
                 elif column != "metadata" and isinstance(value, (dict, list)):
                     raise ValueError("Unexpected structured value")
                 row[column] = value
