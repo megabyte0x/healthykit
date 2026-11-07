@@ -230,3 +230,21 @@ Before any downgrade, inspect the actual subscription, next renewal, add-ons, to
 - Authoritative backend, rollback readiness, remaining hostname/retention dependency, actual billing decision and next renewal status.
 
 Until these are populated with actual hosted results, the initial local rehearsal above is the only recorded real-data acceptance evidence in this runbook.
+
+## Verified rehearsal on 8 November 2026
+
+Production remained on Supabase during this rehearsal. The initial source checkpoint was 7 November19:27:18.786167UTC (8 November00:57:18IST). All181 source chunks verified after restoration; the103,416,359-byte public archive passed two independent PostgreSQL17 restores. The eight public tables contained1,743,287 rows, including one Alembic version row.
+
+The seven application tables imported into a private1,801,981,952-byte SQLite/D1 rehearsal database with matching canonical counts/digests. A direct protected hosted D1 export independently matched all1,743,286 application rows. An arbitrary-precision JSONB metadata audit against PostgreSQL matched every metric/workout metadata object, avoiding float-based false positives. Every preserved source identifier was checked against source ICU ordering; the actual hosted November7 runtime fingerprint and HMAC continuity proof also matched.
+
+All36 representative reads passed locally and in hosted Cloudflare across the five largest workspaces and an empty workspace. Hosted synthetic upload, duplicate retry, summary, rotation and reset checks passed; test-only credentials/workspaces/devices were removed. The largest224,353-metric workspace returned matching summaries with a64MiB live memory reserve. API execution is placed near the ENAM primary using the aws:us-east-1 placement hint; this selects Cloudflare infrastructure near that region. Normal and stressed timings are retained privately; this is not an unlimited-capacity claim.
+
+The deployed schema has14 insert/update guards matching all31 PostgreSQL VARCHAR limits and text/JSONB Unicode constraints. Runtime tests:28pass; forwarding tests:12pass; offline snapshot tests:23pass. The saved-settings fixture and11 pure Swift configuration assertions passed without touching app Keychain data. The broader Task3 runtime attempt was sandbox-blocked; the independently executed Worker suite passed.
+
+Source write-barrier rehearsal verified prior-writer drain and32 blocked insert/update/delete/truncate operations across eight tables. Forward-delta fixtures covered resets, parent deletion/cascade, updates, token changes, nullable metadata and exact floats. A native PostgreSQL reverse-import rehearsal passed12 guarded batches with all seven manifests matching and all eight source guards retained.
+
+Final cutover still requires the fresh frozen backup, a fresh exact metadata audit, complete target digests with no harness application calls, and the bridge deployment. The protected harness is temporary and must be removed after final backup verification. Private operational evidence remains under .healthsync-backups/.
+
+The normal compressed largest-history probe returned200:6.91seconds inside the Worker,9.59seconds to headers,10.28seconds total,267,115compressed bytes. This full-history operation is materially heavier than a bounded list; callers should retain their existing long-running-query timeout budget. There was no fixed latency SLA in this migration; the tested envelope remains below the60second forwarding deadline and30second production CPU limit. Do not describe Cloudflare capacity as unlimited.
+
+Before the final delta, run the exact metadata audit again against the fresh frozen PostgreSQL restore and final SQLite. Stop all harness application calls during final verification, then compare every full-column raw SQLite/D1 chunk. The source and target must remain immutable for that comparison. The temporary admin harness is not a global write barrier.
