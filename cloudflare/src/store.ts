@@ -149,6 +149,9 @@ export class Store {
         const statements = [this.statement('INSERT INTO devices(device_id,first_seen_at,last_seen_at,app_version) VALUES(?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,app_version=excluded.app_version', [device_id, at, at, appVersion]), this.statement('INSERT INTO workspace_devices(workspace_id,device_id,created_at,last_seen_at) VALUES(?,?,?,?) ON CONFLICT(workspace_id,device_id) DO UPDATE SET created_at=excluded.created_at,last_seen_at=excluded.last_seen_at', [workspace_id, device_id, at, at])];
         const deletedIndexes: number[] = [], duplicateIndexes: number[] = [];
         if (metrics.length || workouts.length || deletions.length) {
+            const schema_version = Number(payload.schema_version ?? 1);
+            if (!Number.isInteger(schema_version) || schema_version < -2147483648 || schema_version > 2147483647)
+                throw new HttpError(500, 'Internal server error');
             for (const [kind, table] of [['metric', 'health_metrics'], ['workout', 'health_workouts']]) {
                 const ids = [...new Set<string>(deletions.filter(d => d.kind === kind).map(d => d.id))];
                 for (const part of chunks(ids, 98)) {
@@ -164,7 +167,7 @@ export class Store {
                         statements.push(this.statement(`SELECT count(*) AS n FROM ${table} WHERE workspace_id=? AND device_id=? AND id IN (${placeholders(part.length)})`, [workspace_id, device_id, ...part]));
                     }
             }
-            statements.push(this.upsert('sync_batches', { workspace_id, export_id, device_id, generated_at: timestamp(required(payload.generated_at, 'generated_at')), received_at: at, schema_version: Number(payload.schema_version ?? 1), timezone: required(payload.timezone, 'timezone'), source: required(payload.source, 'source'), date_range_start: timestamp(required(payload.date_range?.start, 'date_range.start')), date_range_end: timestamp(required(payload.date_range?.end, 'date_range.end')), metrics_count: metrics.length, workouts_count: workouts.length }, ['workspace_id', 'export_id']));
+            statements.push(this.upsert('sync_batches', { workspace_id, export_id, device_id, generated_at: timestamp(required(payload.generated_at, 'generated_at')), received_at: at, schema_version, timezone: required(payload.timezone, 'timezone'), source: required(payload.source, 'source'), date_range_start: timestamp(required(payload.date_range?.start, 'date_range.start')), date_range_end: timestamp(required(payload.date_range?.end, 'date_range.end')), metrics_count: metrics.length, workouts_count: workouts.length }, ['workspace_id', 'export_id']));
             for (const [table, rows, kind] of [['health_metrics', metrics, 'metrics'], ['health_workouts', workouts, 'workouts']] as const) {
                 for (const original of chunks(rows, 100)) {
                     if (new Set(original.map(r => r.id)).size !== original.length)

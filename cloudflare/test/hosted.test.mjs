@@ -474,3 +474,52 @@ test('PostgreSQL value guards cover INSERT and UPDATE on every original text col
   }
  }
 });
+test('PostgreSQL integer schema versions reject invalid uploads without changing ingest state',async()=>{
+ const a=await provision(),device='integer-device-'+a.workspace_id;
+ const workout={id:'keep-workout',activity_type:'walk',start_at:stamp,end_at:stamp,duration_seconds:60,source_name:'Synthetic'};
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('keep-metric')],{device_id:device,workouts:[workout]}),{'X-App-Version':'before'})).status,200);
+ async function state() {
+  return Promise.all(['devices','workspace_devices','sync_batches','health_metrics','health_workouts'].map(table=>
+   db.prepare(`SELECT * FROM ${table} WHERE ${table==='devices'?'device_id IN (?,?)':'workspace_id=?'}`).bind(...(table==='devices'?[device,device+'-new']:[a.workspace_id])).all().then(r=>r.results)));
+ }
+ const before=await state();
+ for(const schema_version of [1.5,2147483648,-2147483649,1e20,'1.5','Infinity','NaN']) {
+  for(const device_id of [device,device+'-new']) {
+   const r=await call('/api/apple-health/sync',a.ingest_token,payload([metric('new-metric')],{device_id,schema_version,workouts:[{...workout,id:'new-workout'}],deletions:[{kind:'metric',id:'keep-metric'},{kind:'workout',id:'keep-workout'}]}),{'X-App-Version':'after'});
+   assert.equal(r.status,500,`${schema_version} on ${device_id}`);
+   assert.deepEqual(r.body,{detail:'Internal server error'});
+   assert.deepEqual(await state(),before);
+  }
+ }
+});
+test('PostgreSQL integer schema versions preserve signed boundaries and source coercions',async()=>{
+ const a=await provision();
+ for(const [schema_version,want] of [[-2147483648,-2147483648],[2147483647,2147483647],[-1,-1],[0,0],[undefined,1],[null,1],['-2147483648',-2147483648],['2147483647',2147483647],['2',2],[true,1],[false,0]]) {
+  assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('integer-valid')],{schema_version}))).status,200,String(schema_version));
+  assert.equal((await db.prepare('SELECT schema_version FROM sync_batches WHERE workspace_id=?').bind(a.workspace_id).first()).schema_version,want);
+ }
+});
+test('PostgreSQL integer guards reject INSERT and UPDATE and roll back an entire D1 batch',async()=>{
+ const a=await provision(),device='integer-guard-'+a.workspace_id;
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('integer-guard')],{device_id:device}),{'X-App-Version':'before'})).status,200);
+ const original=await db.prepare('SELECT * FROM sync_batches WHERE workspace_id=?').bind(a.workspace_id).first();
+ const names=Object.keys(original);
+ for(const column of ['schema_version','metrics_count','workouts_count']) {
+  for(const value of [1.5,2147483648,-2147483649,1e20,'not-integer']) {
+   await assert.rejects(db.prepare(`INSERT INTO sync_batches (${names.join(',')}) VALUES (${names.map(()=>'?').join(',')})`).bind(...names.map(name=>name===column?value:name==='export_id'?'invalid-integer':original[name])).run(),/postgres integer guard/);
+   await assert.rejects(db.batch([
+    db.prepare("UPDATE devices SET app_version='after' WHERE device_id=?").bind(device),
+    db.prepare('DELETE FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id),
+    db.prepare(`UPDATE sync_batches SET ${column}=? WHERE workspace_id=?`).bind(value,a.workspace_id)
+   ]),/postgres integer guard/);
+   assert.deepEqual(await db.prepare('SELECT * FROM sync_batches WHERE workspace_id=?').bind(a.workspace_id).first(),original);
+   assert.equal((await db.prepare('SELECT app_version FROM devices WHERE device_id=?').bind(device).first()).app_version,'before');
+   assert.equal((await db.prepare('SELECT count(*) n FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id).first()).n,1);
+  }
+  for(const value of column==='schema_version'?[-2147483648,0,2147483647]:[0,2147483647]) {
+   await db.prepare(`UPDATE sync_batches SET ${column}=? WHERE workspace_id=?`).bind(value,a.workspace_id).run();
+   assert.equal((await db.prepare(`SELECT ${column} n FROM sync_batches WHERE workspace_id=?`).bind(a.workspace_id).first()).n,value);
+  }
+  await db.prepare(`UPDATE sync_batches SET ${column}=? WHERE workspace_id=?`).bind(original[column],a.workspace_id).run();
+ }
+});

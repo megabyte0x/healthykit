@@ -19,6 +19,7 @@ run="$PWD/.healthsync-backups/$(date -u +%Y-%m-%dT%H%M%SZ)-cutover"
 mkdir -m 700 "$run"
 wrangler="$PWD/web/node_modules/.bin/wrangler"
 schema="$PWD/cloudflare/migrations/0001_hosted.sql"
+migrations="$PWD/cloudflare/migrations"
 ```
 
 Keep private directories mode 0700 and all snapshot/SQL/export/log/config/manifest files mode 0600, including files created by third-party tools. Precreate redirected outputs under this umask and check permissions with `stat -f '%Lp %N' FILE`. Never pipe a D1 dump to stdout, `cat` snapshots, or print SQL containing data. Store digests privately; tracked evidence contains only aggregate counts, digest comparisons and timing. Do not read private helpers casually: their named interfaces below are supplied by the controller, who validates their current code before running them.
@@ -76,28 +77,49 @@ The tracked snapshot utility supports a small/private portable JSON snapshot sha
 python3 scripts/cloudflare_snapshot.py manifest "$run/snapshot.json" "$run/manifest.json"
 python3 scripts/cloudflare_snapshot.py verify "$run/snapshot.json" "$run/manifest.json"
 python3 scripts/cloudflare_snapshot.py sqlite-import "$run/snapshot.json" "$run/rehearsal.sqlite" "$schema"
+for migration in "$migrations"/*.sql; do
+  if [ "$migration" != "$schema" ]; then sqlite3 "$run/rehearsal.sqlite" <"$migration"; fi
+done
+sqlite3 "$run/rehearsal.sqlite" "SELECT name FROM sqlite_schema WHERE type='trigger' ORDER BY name; PRAGMA foreign_key_check;" >"$run/sqlite-guards.log"
 python3 scripts/cloudflare_snapshot.py sqlite-export "$run/rehearsal.sqlite" "$run/roundtrip.json"
 python3 scripts/cloudflare_snapshot.py verify "$run/roundtrip.json" "$run/manifest.json"
 ```
 
-For the full large dataset, use the controller's bounded canonical JSONL exporter/importer instead of materializing every row in one process. Do not interchange its manifest format with the portable utility without an explicit conversion and comparison.
+For the full large dataset, use the controller's bounded canonical JSONL exporter/importer instead of materializing every row in one process. These are alternative import paths, each requiring an empty destination. Do not interchange manifest formats without an explicit conversion and comparison. The `schema` variable is only the original seven-table baseline; every fresh import must also apply all later migrations. Require 14 text/JSON compatibility triggers plus the two signed-integer triggers, and no foreign-key violations, before using a clone.
 
 ```bash
 python3 "$recovery/stream_rehearsal.py" import "$run/canonical-a" "$run/rehearsal.sqlite" "$schema" >"$run/local-import.log" 2>&1
+for migration in "$migrations"/*.sql; do
+  if [ "$migration" != "$schema" ]; then sqlite3 "$run/rehearsal.sqlite" <"$migration"; fi
+done
+sqlite3 "$run/rehearsal.sqlite" "SELECT name FROM sqlite_schema WHERE type='trigger' ORDER BY name; PRAGMA foreign_key_check;" >"$run/sqlite-guards.log"
 python3 "$recovery/stream_rehearsal.py" verify "$run/canonical-a" "$run/rehearsal.sqlite" >"$run/local-verify.log" 2>&1
 python3 "$recovery/build_d1_sql.py" "$run/canonical-a" "$schema" "$run/rehearsal.sql" >"$run/build-sql.log" 2>&1
 chmod 600 "$run/rehearsal.sqlite" "$run/rehearsal.sql"
-python3 - "$run/local-wrangler.json" <<'PY'
+python3 - "$run/local-wrangler.json" "$migrations" <<'PY'
 import json, sys
 from pathlib import Path
 Path(sys.argv[1]).write_text(json.dumps({
     "name": "healthsync-rehearsal", "compatibility_date": "2026-11-07",
     "d1_databases": [{"binding": "DB", "database_name": "healthsync-hosted",
-                      "database_id": "synthetic-rehearsal"}]
+                      "database_id": "synthetic-rehearsal", "migrations_dir": sys.argv[2]}]
 }))
 PY
+cat >"$run/imported-baseline.sql" <<'SQL'
+CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+INSERT INTO d1_migrations(name) VALUES ('0001_hosted.sql');
+SQL
 "$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
   --file "$run/rehearsal.sql" --yes >"$run/local-d1-import.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
+  --file "$run/imported-baseline.sql" --yes >"$run/local-d1-baseline.log" 2>&1
+"$wrangler" d1 migrations apply healthsync-hosted --config "$run/local-wrangler.json" --local \
+  >"$run/local-d1-migrations.log" 2>&1
+"$wrangler" d1 migrations list healthsync-hosted --config "$run/local-wrangler.json" --local \
+  >"$run/local-d1-pending.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
+  --command "SELECT name FROM d1_migrations ORDER BY id; SELECT name FROM sqlite_schema WHERE type='trigger' ORDER BY name; PRAGMA foreign_key_check;" \
+  >"$run/local-d1-schema-check.log" 2>&1
 "$wrangler" d1 export healthsync-hosted --config "$run/local-wrangler.json" --local \
   --output "$run/local-d1.sql" --table workspaces devices workspace_devices access_tokens sync_batches health_metrics health_workouts >"$run/local-d1-export.log" 2>&1
 chmod 600 "$run/local-d1.sql"
@@ -105,9 +127,13 @@ sqlite3 "$run/local-d1-export.sqlite" <"$run/local-d1.sql" >"$run/local-d1-resto
 python3 "$recovery/stream_rehearsal.py" verify "$run/canonical-a" "$run/local-d1-export.sqlite" >"$run/local-d1-verify.log" 2>&1
 ```
 
-Use a fresh run directory and empty SQLite destinations. The SQL builder includes schema: do not preapply the same schema/migrations. Both local Wrangler commands use the same private configuration and default persistence rooted beside it, so export addresses the database just imported. Do not add `--persist-to` only to import: the installed export command has no matching option. The controller's direct local SQLite rehearsal and full manifests remain a separate verified gate.
+Use a fresh run directory and empty SQLite destinations. The SQL builder includes exactly `0001_hosted.sql` and data: do not apply the baseline again. After verifying the imported base-table/index definitions match that exact migration, record only `0001_hosted.sql` in Wrangler's migration table and apply all remaining migrations (`0002_postgres_value_guards.sql`, `0003_postgres_integer_guards.sql`, and any later reviewed files). Require those three applied names, no pending migrations, all 16 compatibility triggers and no foreign-key violations. Never mark an unapplied guard migration as applied. All local Wrangler commands use the same private configuration and default persistence rooted beside it, so export addresses the database just imported. Do not add `--persist-to` only to import: the installed export command has no matching option. The controller's direct local SQLite rehearsal and full manifests remain a separate verified gate.
+
+An alternative is migrations-first: on an empty target, run `d1 migrations apply` before importing a separately reviewed **data-only** dump. That dump must contain no `CREATE TABLE`/index/trigger statements or migration-table records. Do not feed the schema-plus-data SQL builder output to a migrations-first database. Keep the compatibility triggers enabled during data-only imports.
 
 Run private source-boundary comparisons against restored data: all four read routes, unfiltered and type/activity/device filters, limit 1/500, offset 0/100000, both timestamp boundary groups, ICU-equivalent/case/punctuation/accented/non-Latin/supplementary IDs, microsecond containment, DST/historical timezone cases, per-device daily preference, and nullable workout fields. Compare preserved fields and list order exactly; record tight documented tolerances only for derived floating-point sums. Measure worst-case summaries, latency, rows read, response size, tie/group/query budgets and source/runtime collation fingerprint. Test writes, reset/revoke, duplicate retry, stale authorization and drain races only on isolated synthetic clones/workspaces.
+
+The 10,000-item parsing ceiling does not guarantee an upload fits the separate 1,000-statement request budget. Ingest uses one health-row insert per record plus authorization, device, batch and duplicate/deletion statements; an ordinary 1,000-row upload exceeds the budget and fails atomically with 503. Current Swift sync/backfill uploads cap batches at 100 records, and the controller's 120-record hosted rehearsal passed. Historical jumbo uploads are outside this demonstrated envelope. Preserve atomic failure; never split an upload into partially committed batches to bypass the limit.
 
 ## Freeze and capture every final change
 
@@ -142,12 +168,25 @@ python3 "$recovery/build_d1_sql.py" "$finalCanonical" "$schema" "$run/final.sql"
 chmod 600 "$run/final.sql"
 "$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
   --file "$run/final.sql" --yes >"$run/remote-import.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
+  --file "$run/imported-baseline.sql" --yes >"$run/remote-baseline.log" 2>&1
+"$wrangler" d1 migrations apply healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
+  >"$run/remote-migrations.log" 2>&1
+"$wrangler" d1 migrations list healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
+  >"$run/remote-pending.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
+  --command "SELECT name FROM d1_migrations ORDER BY id; SELECT name FROM sqlite_schema WHERE type='trigger' ORDER BY name; PRAGMA foreign_key_check;" \
+  >"$run/remote-schema-check.log" 2>&1
 "$wrangler" d1 export healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
   --output "$run/remote-verified.sql" --table workspaces devices workspace_devices access_tokens sync_batches health_metrics health_workouts >"$run/remote-export.log" 2>&1
 chmod 600 "$run/remote-verified.sql"
 sqlite3 "$run/remote-verified.sqlite" <"$run/remote-verified.sql" >"$run/remote-restore.log" 2>&1
 python3 "$recovery/stream_rehearsal.py" verify "$finalCanonical" "$run/remote-verified.sqlite" >"$run/remote-digest-verify.log" 2>&1
 ```
+
+These commands are for a fresh schema-plus-data rebuild only; create `imported-baseline.sql` as above and verify the exact imported baseline before recording it. Require the three applied migration names, no pending migrations, all 16 compatibility triggers and no foreign-key violations before exporting. For a migrations-first rebuild, apply all migrations on the empty target and use only the reviewed data-only import; omit both the schema-plus-data import and baseline-seeding commands.
+
+The already prepared hosted target was created from the exact `0001` SQL import, independently schema-verified, then recorded as `0001` in `d1_migrations` before applying `0002`. For a final delta onto that target, retain its tables and existing triggers: do not replay the fresh import or seed migration history again. Inspect migration history, apply only pending migrations (including `0003`), check history/triggers as above, and run the controller-reviewed transactional delta while locked. This describes required steps; it does not assert `0003` or final cutover has run remotely.
 
 A successful import command or row total alone is insufficient. Require **all seven canonical count and digest matches**, FK integrity, preserved token records/secret, valid schema and Worker readiness/configuration checks. The controller may use its reviewed bounded hosted-export harness instead if the SQL restore path cannot safely process the full dump; require the same complete comparison. Supply the unchanged HMAC secret through the protected connector/stdin path, with no secret in command arguments or returned tool output. Never copy the Supabase service-role key into the Worker.
 
