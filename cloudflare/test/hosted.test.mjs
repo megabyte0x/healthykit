@@ -358,3 +358,41 @@ test('mutation authorization remains bound to the originally authenticated works
  assert.equal(r.status,403);
  assert.equal((await db.prepare('SELECT count(*) n FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id).first()).n,0);
 });
+test('ICU-equivalent metric summaries retain v10 first-record order across scan pages', async () => {
+    const a = await provision();
+    const composed = '\u00e9', decomposed = 'e\u0301';
+    assert.equal(composed.localeCompare(decomposed), 0);
+    await call('/api/apple-health/sync', a.ingest_token, payload([
+        metric('A', {type:composed,value:2}),
+        metric('a', {type:decomposed,value:100}),
+        metric('z', {type:decomposed,value:7,metadata:{aggregation:'daily_sum'}}),
+        metric('seed', {type:'padding'})
+    ]));
+    await db.prepare("WITH RECURSIVE n(x) AS (SELECT 0 UNION ALL SELECT x+1 FROM n WHERE x<5000) INSERT INTO health_metrics SELECT workspace_id,device_id,printf('B%05d',x),type,value,unit,start_at,end_at,source_name,source_bundle_id,metadata,export_id FROM health_metrics,n WHERE workspace_id=? AND id='seed'").bind(a.workspace_id).run();
+    const r = await call('/api/agent/health-data?limit=1', a.agent_token);
+    assert.equal(r.status,200);
+    const equivalent = r.body.metric_daily_summaries.filter(row=>row.type===composed||row.type===decomposed);
+    assert.deepEqual(equivalent.map(row=>row.type),[decomposed,composed]);
+    assert.equal(equivalent[0].total_value,7);
+});
+test('ICU-equivalent workout summaries retain v10 first-record order across scan pages', async () => {
+    const a = await provision();
+    const composed = '\u00e9', decomposed = 'e\u0301';
+    const workout = (id,activity_type) => ({id,activity_type,start_at:stamp,end_at:stamp,duration_seconds:60,source_name:'Synthetic'});
+    await call('/api/apple-health/sync',a.ingest_token,payload([],{workouts:[workout('A',composed),workout('a',decomposed),workout('seed','padding')]}));
+    await db.prepare("WITH RECURSIVE n(x) AS (SELECT 0 UNION ALL SELECT x+1 FROM n WHERE x<5000) INSERT INTO health_workouts SELECT workspace_id,device_id,printf('B%05d',x),activity_type,start_at,end_at,duration_seconds,total_energy_kcal,active_energy_kcal,distance_meters,source_name,source_bundle_id,metadata,export_id FROM health_workouts,n WHERE workspace_id=? AND id='seed'").bind(a.workspace_id).run();
+    const r = await call('/api/agent/health-data?limit=1',a.agent_token);
+    assert.equal(r.status,200);
+    assert.deepEqual(r.body.workout_daily_summaries.filter(row=>row.activity_type===composed||row.activity_type===decomposed).map(row=>row.activity_type),[decomposed,composed]);
+});
+test('summary ties use the first source record across devices rather than a summary-key fallback', async () => {
+    const a = await provision(), composed='\u00e9', decomposed='e\u0301';
+    for (const [device_id,id,type] of [['A','a',decomposed],['A','Z',composed],['a','b',composed]]) {
+        const workout={id,activity_type:type,start_at:stamp,end_at:stamp,duration_seconds:60,source_name:'Synthetic'};
+        assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric(id,{type})],{device_id,export_id:device_id+id,workouts:[workout]}))).status,200);
+    }
+    const r=await call('/api/agent/health-data',a.agent_token);
+    assert.equal(r.status,200);
+    assert.deepEqual(r.body.metric_daily_summaries.map(row=>row.type),[composed,decomposed]);
+    assert.deepEqual(r.body.workout_daily_summaries.map(row=>row.activity_type),[composed,decomposed]);
+});

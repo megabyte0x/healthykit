@@ -258,7 +258,7 @@ export class Store {
         return { metric_types, activity_types, timezones, devices };
     }
     async summaries(auth: Auth, url: URL) {
-        const summary = new Summaries(this.dates, capacity.groups, capacity.groupBytes);
+        const summary = new Summaries(this.dates, capacity.groups, capacity.groupBytes, this.collation);
         for (const table of ['health_metrics', 'health_workouts'] as const) {
             const f = this.filter(table, auth, url);
             let cursor: Row | undefined;

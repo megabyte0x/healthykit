@@ -7,5 +7,5 @@
   "secrets": {"required":["TOKEN_HASH_SECRET"]},
   "vars": {"HOSTED_PUBLIC_BASE_URL":"https://api.healthysync.app","MIGRATION_STATE":"locked"},
   "d1_databases": [{"binding":"DB","database_name":"healthsync-hosted","migrations_dir":"migrations"}],
-  "observability": {"enabled":true,"logs":{"enabled":true,"invocation_logs":false},"traces":{"enabled":true}}
+  "observability": {"enabled":true,"redact_query_string":true,"logs":{"enabled":true,"invocation_logs":false},"traces":{"enabled":true}}
 }
