@@ -1,5 +1,19 @@
 import Foundation
 
+enum BackfillDataMode: String, CaseIterable, Identifiable {
+    case dailySummary
+    case rawSamples
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .dailySummary: "Daily summaries"
+        case .rawSamples: "Original blood oxygen & HRV"
+        }
+    }
+}
+
 enum SyncFrequency: String, CaseIterable, Codable, Identifiable {
     case manualOnly
     case hourlyBestEffort

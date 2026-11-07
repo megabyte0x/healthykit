@@ -72,6 +72,26 @@ pip install -r backend/requirements.txt
 python3 -m pytest Tests/backend/test_backend_api.py -q
 ```
 
+### Historical sync detail
+
+Historical Sync offers **Daily summaries** (the existing default) or **Original blood
+oxygen & HRV**. The latter exports individual blood oxygen and HRV records, retaining
+sample UUIDs, timestamps, source attribution, units, and metadata. All other quantity
+metrics retain daily sums/averages, including steps, energy, distance, and heart rate.
+This preserves HealthKit statistics' overlap handling for cumulative metrics.
+
+Both modes retain 30-day date windows. Blood oxygen and HRV in original mode are read
+in bounded 100-record HealthKit pages; each page is queued and uploaded before the next
+read. The existing durable queue, upload chunking, retries, and deduplication are reused.
+Workouts and category samples crossing a window boundary are selected by start time in
+original mode and retain their full end time. Sleep keeps its existing overlap query.
+Empty windows do not each add a log row; a completely empty backfill logs once.
+
+Large ranges can take longer; keep the app open while backfilling. Existing summary
+records are not deleted. The backend summary view prefers existing aggregates; consumers
+requiring original records should distinguish `metadata.aggregation` rather than add
+summaries to samples. Blood oxygen records are discrete, not continuous monitoring.
+
 ## Backend Contract
 
 The app posts to:

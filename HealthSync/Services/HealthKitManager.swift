@@ -20,7 +20,7 @@ struct HealthKitIncrementalResult: Equatable {
     let deletions: [HealthRecordDeletion]
 }
 
-private enum BackfillQuantityAggregationStrategy: String {
+enum BackfillQuantityAggregationStrategy: String {
     case dailySum = "daily_sum"
     case dailyAverage = "daily_average"
 
@@ -94,21 +94,30 @@ protocol HealthKitSyncReading {
 }
 
 final class HealthKitManager: HealthKitSyncReading {
+    struct BackfillPage {
+        let samples: [HKSample]
+        let deletedCount: Int
+        let anchor: HKQueryAnchor?
+    }
+    typealias BackfillPageReader = (HKSampleType, NSPredicate, HKQueryAnchor?, Int) async throws -> BackfillPage
     typealias SampleReader = (HKSampleType, NSPredicate?) async throws -> [HKSample]
     typealias WorkoutStatisticsReader = (HKWorkout, HKQuantityType, HKStatisticsOptions) -> HKQuantity?
 
     private let healthStore: HKHealthStore
     private let sampleReader: SampleReader?
+    private let backfillPageReader: BackfillPageReader?
     private let workoutStatisticsReader: WorkoutStatisticsReader?
     private var observerQueries: [HKObserverQuery] = []
     private var observerSampleTypes: [HKSampleType] = []
 
     init(
         healthStore: HKHealthStore = HKHealthStore(), sampleReader: SampleReader? = nil,
-        workoutStatisticsReader: WorkoutStatisticsReader? = nil
+        workoutStatisticsReader: WorkoutStatisticsReader? = nil,
+        backfillPageReader: BackfillPageReader? = nil
     ) {
         self.healthStore = healthStore
         self.sampleReader = sampleReader
+        self.backfillPageReader = backfillPageReader
         self.workoutStatisticsReader = workoutStatisticsReader
     }
 
@@ -161,38 +170,79 @@ final class HealthKitManager: HealthKitSyncReading {
         return result
     }
 
-    func fetchBackfillSamples(types: Set<HealthDataType>, start: Date, end: Date) async throws -> HealthKitFetchResult {
-        guard isHealthDataAvailable else {
-            throw HealthKitManagerError.healthDataUnavailable
-        }
-        var result = HealthKitFetchResult.empty
-        for type in types {
-            guard HealthKitTypeRegistry.objectType(for: type) != nil else { continue }
+    // The consumer must finish persisting/uploading a page before the next read.
+    // Anchors are local to this range, not the ordinary incremental-sync cursor.
+    func forEachBackfillBatch(
+        types: Set<HealthDataType>, start: Date, end: Date, mode: BackfillDataMode,
+        consume: (HealthKitFetchResult) async throws -> Void
+    ) async throws {
+        guard isHealthDataAvailable else { throw HealthKitManagerError.healthDataUnavailable }
+        for type in types.sorted(by: { $0.rawValue < $1.rawValue }) {
+            try Task.checkCancellation()
+            guard let sampleType = HealthKitTypeRegistry.sampleType(for: type) else { continue }
+            if mode == .rawSamples && (type == .oxygenSaturation || type == .hrvSDNN) {
+                let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate])
+                var anchor: HKQueryAnchor?
+                let limit = 100
+                while true {
+                    try Task.checkCancellation()
+                    let page: BackfillPage
+                    do {
+                        page = try await backfillPage(type: sampleType, predicate: predicate, anchor: anchor, limit: limit)
+                    } catch {
+                        guard HealthKitReadErrorPolicy.shouldSkipType(error) else { throw error }
+                        break
+                    }
+                    if !page.samples.isEmpty {
+                        // Consumer errors must propagate; never treat an upload failure
+                        // as a skippable HealthKit permission error.
+                        try await consume(convert(samples: page.samples, as: type))
+                    }
+                    if page.samples.count + page.deletedCount < limit { break }
+                    guard let nextAnchor = page.anchor, !nextAnchor.isEqual(anchor) else {
+                        throw HealthKitManagerError.missingAnchor
+                    }
+                    anchor = nextAnchor
+                }
+                continue
+            }
+
+            let result: HealthKitFetchResult
             do {
+                var batch = HealthKitFetchResult.empty
+                // Keep summary-mode predicates unchanged; raw-mode boundaries select
+                // records by start time, including workouts/categories that end later.
+                let options: HKQueryOptions = mode == .rawSamples ? [.strictStartDate] : [.strictStartDate, .strictEndDate]
                 switch type {
                 case .sleepAnalysis:
-                    result.sleepSamples += try await sleepSamples(start: start, end: end)
+                    batch.sleepSamples = try await sleepSamples(start: start, end: end)
                 case .workouts:
-                    result.workoutSamples += try await workoutSamples(start: start, end: end)
+                    batch.workoutSamples = try await workoutSamples(start: start, end: end, options: options)
                 default:
                     if type.kind == .category {
-                        result.categorySamples += try await categorySamples(for: type, start: start, end: end)
-                    } else if let strategy = backfillAggregationStrategy(for: type) {
-                        result.quantitySamples += try await aggregatedQuantitySamples(
-                            for: type,
-                            start: start,
-                            end: end,
-                            strategy: strategy
-                        )
-                    } else {
-                        result.quantitySamples += try await quantitySamples(for: type, start: start, end: end)
+                        batch.categorySamples = try await categorySamples(for: type, start: start, end: end, options: options)
+                    } else if let strategy = backfillAggregationStrategy(for: type, mode: mode) {
+                        batch.quantitySamples = try await aggregatedQuantitySamples(for: type, start: start, end: end, strategy: strategy)
                     }
                 }
+                result = batch
             } catch {
                 guard HealthKitReadErrorPolicy.shouldSkipType(error) else { throw error }
+                continue
             }
+            if !result.isEmpty { try await consume(result) }
         }
-        return result
+    }
+
+    private func backfillPage(type: HKSampleType, predicate: NSPredicate, anchor: HKQueryAnchor?, limit: Int) async throws -> BackfillPage {
+        if let backfillPageReader { return try await backfillPageReader(type, predicate, anchor, limit) }
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: limit) { _, samples, deleted, nextAnchor, error in
+                if let error { continuation.resume(throwing: HealthKitManagerError.map(error)) }
+                else { continuation.resume(returning: BackfillPage(samples: samples ?? [], deletedCount: deleted?.count ?? 0, anchor: nextAnchor)) }
+            }
+            healthStore.execute(query)
+        }
     }
 
     func fetchIncremental(types: Set<HealthDataType>, anchors: [HealthDataType: String]) async throws -> HealthKitIncrementalResult {
@@ -398,11 +448,11 @@ final class HealthKitManager: HealthKitSyncReading {
         }
     }
 
-    private func categorySamples(for type: HealthDataType, start: Date, end: Date) async throws -> [HealthCategorySampleDTO] {
+    private func categorySamples(for type: HealthDataType, start: Date, end: Date, options: HKQueryOptions = [.strictStartDate, .strictEndDate]) async throws -> [HealthCategorySampleDTO] {
         guard let categoryType = HealthKitTypeRegistry.sampleType(for: type) as? HKCategoryType else {
             throw HealthKitManagerError.unsupportedType(type)
         }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate, .strictEndDate])
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
         let samples = try await samples(sampleType: categoryType, predicate: predicate)
         return samples.compactMap { sample in
             guard let categorySample = sample as? HKCategorySample else { return nil }
@@ -420,9 +470,9 @@ final class HealthKitManager: HealthKitSyncReading {
         }
     }
 
-    private func workoutSamples(start: Date, end: Date) async throws -> [HealthWorkoutSampleDTO] {
+    private func workoutSamples(start: Date, end: Date, options: HKQueryOptions = [.strictStartDate, .strictEndDate]) async throws -> [HealthWorkoutSampleDTO] {
         let workoutType = HKObjectType.workoutType()
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate, .strictEndDate])
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
         let samples = try await samples(sampleType: workoutType, predicate: predicate)
         return try await convert(samples: samples, as: .workouts).workoutSamples
     }
@@ -612,8 +662,11 @@ final class HealthKitManager: HealthKitSyncReading {
         } ?? [:]
     }
 
-    private func backfillAggregationStrategy(for type: HealthDataType) -> BackfillQuantityAggregationStrategy? {
+    func backfillAggregationStrategy(for type: HealthDataType, mode: BackfillDataMode) -> BackfillQuantityAggregationStrategy? {
         guard type.kind == .quantity else { return nil }
+        // Only these discrete measurements bypass aggregation. In particular,
+        // cumulative types must retain HealthKit's device-overlap handling.
+        if mode == .rawSamples && (type == .oxygenSaturation || type == .hrvSDNN) { return nil }
         switch type {
         case .activeEnergy, .appleExerciseTime, .appleMoveTime, .appleStandTime, .basalEnergy,
              .distanceCrossCountrySkiing, .distanceCycling, .distanceDownhillSnowSports, .distancePaddleSports,

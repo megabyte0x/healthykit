@@ -4,12 +4,10 @@ struct BackfillView: View {
     @EnvironmentObject private var appState: AppState
     @State private var startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
     @State private var endDate = Date()
+    @State private var dataMode: BackfillDataMode = .dailySummary
 
     var body: some View {
-        ZStack {
-            HealthSyncTheme.backgroundGradient
-                .ignoresSafeArea()
-            
+        ScrollView {
             VStack(spacing: 24) {
                 // Info Card
                 VStack(alignment: .leading, spacing: 10) {
@@ -40,6 +38,19 @@ struct BackfillView: View {
                     
                     Divider()
                     
+                    Picker("Data detail", selection: $dataMode) {
+                        ForEach(BackfillDataMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .disabled(appState.isBusy)
+
+                    Text(dataMode == .rawSamples
+                         ? "Uploads individual blood oxygen and HRV samples with original timestamps and sources. Other quantity metrics keep daily summaries to avoid overlapping-device totals. Blood oxygen readings are discrete, not continuous monitoring."
+                         : "Uploads daily sums or averages for quantity metrics. Sleep stages, category samples, and workouts keep their existing detail.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     VStack(spacing: 12) {
                         DatePicker("Start Date", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                             .font(.subheadline.weight(.medium))
@@ -137,7 +148,7 @@ struct BackfillView: View {
                     }
                     
                     Button {
-                        Task { await appState.backfill(start: startDate, end: endDate) }
+                        Task { await appState.backfill(start: startDate, end: endDate, mode: dataMode) }
                     } label: {
                         HStack {
                             if appState.isBusy {
@@ -167,6 +178,7 @@ struct BackfillView: View {
             }
             .padding(16)
         }
+        .background(HealthSyncTheme.backgroundGradient.ignoresSafeArea())
         .navigationTitle("Historical Sync")
         .navigationBarTitleDisplayMode(.inline)
     }

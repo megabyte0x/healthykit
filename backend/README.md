@@ -169,12 +169,15 @@ curl -H "Authorization: Bearer $AGENT_TOKEN" \
 The agent response includes raw records plus digest fields designed for AI tools:
 
 - `agent_schema_version`
+- `workspace_id`, derived from the agent token
 - `page.limit`, `page.offset`, and `page.has_more`
 - `catalog.metric_types`, `catalog.activity_types`, `catalog.timezones`, and `catalog.devices`
 - `metrics[].timezone` and `metrics[].local_date`
 - `workouts[].timezone` and `workouts[].local_date`
 - `metric_daily_summaries`
 - `workout_daily_summaries`
+
+`/api/agent/metrics`, `/workouts`, and `/syncs` return `workspace_id`, `items`, and `page`. Results are sorted newest first in a stable order. To fetch only some metric types, call `/api/agent/metrics?type=...` once per type.
 
 The database also exposes read-only SQL views for internal agent/reporting queries:
 

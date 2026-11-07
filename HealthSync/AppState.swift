@@ -135,6 +135,9 @@ enum BackfillSync {
         guard result.failedCount == 0 else {
             throw BackfillSyncError.uploadFailed(result.messages.last ?? "Backfill upload failed.")
         }
+        guard result.uploadedCount > 0 else {
+            throw BackfillSyncError.uploadFailed("Upload is still queued. Retry after the current sync finishes.")
+        }
     }
 
     static func shouldUpload(_ payload: SyncPayload) -> Bool {
@@ -388,7 +391,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    func backfill(start: Date, end: Date) async {
+    func backfill(start: Date, end: Date, mode: BackfillDataMode = .dailySummary) async {
         guard end > start else { return }
         backfillProgress = 0
         backfillError = nil
@@ -396,19 +399,30 @@ final class AppState: ObservableObject {
             try await prepareHostedStorageIfNeeded()
             let chunks = BackfillSync.chunks(start: start, end: end)
             let total = Double(chunks.count)
+            var uploadedAny = false
             for (index, chunk) in chunks.enumerated() {
                 do {
-                    _ = try await syncDateRangeThrowing(
-                        start: chunk.start,
-                        end: chunk.end,
-                        refreshAfterUpload: false,
-                        optimizedBackfill: true
-                    )
+                    guard let store else { throw APIClientError.invalidResponse }
+                    try await ensureHealthPermissionsRequested()
+                    let configuration = try await uploadConfiguration()
+                    let deviceID = try await store.deviceID()
+                    try await healthKit.forEachBackfillBatch(
+                        types: settings.selectedTypes, start: chunk.start, end: chunk.end, mode: mode
+                    ) { fetchResult in
+                        let uploaded = try await self.uploadFetchResult(
+                            fetchResult, deviceID: deviceID, start: chunk.start, end: chunk.end,
+                            configuration: configuration
+                        )
+                        uploadedAny = uploadedAny || uploaded
+                    }
                 } catch {
                     backfillError = userMessage(from: error)
                     throw error
                 }
                 backfillProgress = min(1, Double(index + 1) / total)
+            }
+            if !uploadedAny {
+                try await store?.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noSamplesFoundForDateRange))
             }
             backfillProgress = 1
             await refresh()
@@ -461,18 +475,32 @@ final class AppState: ObservableObject {
 
     private func syncDateRangeThrowing(
         start: Date,
-        end: Date,
-        refreshAfterUpload: Bool = true,
-        optimizedBackfill: Bool = false
+        end: Date
     ) async throws -> Bool {
-        guard let store, let syncEngine else { throw APIClientError.invalidResponse }
+        guard let store else { throw APIClientError.invalidResponse }
         try await ensureHealthPermissionsRequested()
         let configuration = try await uploadConfiguration()
-        let fetchResult = try await (optimizedBackfill
-            ? healthKit.fetchBackfillSamples(types: settings.selectedTypes, start: start, end: end)
-            : healthKit.fetchSamples(types: settings.selectedTypes, start: start, end: end))
+        let fetchResult = try await healthKit.fetchSamples(types: settings.selectedTypes, start: start, end: end)
+        let uploaded = try await uploadFetchResult(
+            fetchResult, deviceID: try await store.deviceID(), start: start, end: end,
+            configuration: configuration
+        )
+        if !uploaded {
+            try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noSamplesFoundForDateRange))
+        }
+        await refresh()
+        return uploaded
+    }
+
+    // Shared by recent exports and streaming history; each page is queued and
+    // acknowledged before the next HealthKit page is requested.
+    private func uploadFetchResult(
+        _ fetchResult: HealthKitFetchResult, deviceID: String, start: Date, end: Date,
+        configuration: UploadConfiguration
+    ) async throws -> Bool {
+        guard let syncEngine else { throw APIClientError.invalidResponse }
         let payload = try normalizer.payload(
-            deviceID: try await store.deviceID(),
+            deviceID: deviceID,
             dateRange: SyncDateRange(start: start, end: end),
             timezone: TimeZone.current.identifier,
             quantitySamples: fetchResult.quantitySamples,
@@ -480,20 +508,11 @@ final class AppState: ObservableObject {
             categorySamples: fetchResult.categorySamples,
             workoutSamples: fetchResult.workoutSamples
         )
-        guard BackfillSync.shouldUpload(payload) else {
-            try await store.appendLog(SyncLogEntry(level: .info, message: HealthSyncUserMessages.noSamplesFoundForDateRange))
-            if refreshAfterUpload {
-                await refresh()
-            }
-            return false
-        }
+        guard BackfillSync.shouldUpload(payload) else { return false }
         for uploadPayload in BackfillSync.uploadPayloads(for: payload) {
             let batch = try await syncEngine.queue(payload: uploadPayload)
             let result = await syncEngine.uploadQueuedBatch(batch, configuration: configuration)
             try BackfillSync.validateUpload(result)
-        }
-        if refreshAfterUpload {
-            await refresh()
         }
         return true
     }

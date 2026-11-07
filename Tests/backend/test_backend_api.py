@@ -300,6 +300,13 @@ def test_hosted_token_capabilities_are_separated(tmp_path: Path) -> None:
 
     agent_read = client.get("/api/agent/metrics", headers=agent_headers)
     assert agent_read.status_code == 200
+    assert agent_read.json()["workspace_id"] == provisioned["workspace_id"]
+
+    empty_read = client.get("/api/agent/metrics?type=noSuchType", headers=agent_headers).json()
+    assert empty_read["items"] == []
+    assert empty_read["workspace_id"] == provisioned["workspace_id"]
+    for path in ("/api/agent/workouts", "/api/agent/syncs"):
+        assert client.get(path, headers=agent_headers).json()["workspace_id"] == provisioned["workspace_id"]
 
 
 def test_hosted_agent_token_can_be_rotated_with_ingest_token(tmp_path: Path) -> None:
