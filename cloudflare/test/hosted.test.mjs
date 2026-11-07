@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../../web/package.json', import.meta.url));
@@ -24,6 +24,7 @@ export default {async fetch(request, env, ctx) {
  const scenario=request.headers.get('X-Test-Scenario'), workspace=request.headers.get('X-Test-Workspace');
  const saved={...capacity};let fired=false,billedRows=0,maxBindings=0;
  const original=env.DB, sql=new WeakMap();
+ if(scenario==='nul-app-version')request=new Proxy(request,{get(target,key){if(key==='headers')return {get(name){return name.toLowerCase()==='x-app-version'?'invalid\\u0000version'.replace('\\u0000',String.fromCharCode(0)):target.headers.get(name)}};return Reflect.get(target,key,target)}});
  if(scenario==='fingerprint')return Response.json(new SourceCollation().fingerprint());
  if(scenario==='locked')env={...env,MIGRATION_STATE:'locked'};
  if(scenario==='missing-state')env={...env,MIGRATION_STATE:undefined};
@@ -58,14 +59,9 @@ export default {async fetch(request, env, ctx) {
 }};`, resolveDir: new URL('..', import.meta.url).pathname, sourcefile: 'runtime-test-wrapper.ts' }, bundle: true, write: false, format: 'esm', platform: 'browser', logLevel: 'silent' })).outputFiles[0].text;
     mf = new Miniflare({ ...convertV4MiniflareOptions({ modules: true, script, compatibilityDate: '2026-10-26', d1Databases: { DB: 'synthetic' }, bindings: { TOKEN_HASH_SECRET: 'synthetic-test-secret', HOSTED_PUBLIC_BASE_URL: 'https://api.healthysync.app', MIGRATION_STATE: 'active' }, outboundService: () => new Response('Network disabled', { status: 502 }) }), resourcePersistencePath: directory });
     db = await mf.getD1Database('DB');
-    try {
-        const sql = await readFile(new URL('../migrations/0001_hosted.sql', import.meta.url), 'utf8');
-        for (const statement of sql.split(';').map(s => s.trim()).filter(Boolean))
-            await db.prepare(statement).run();
-    }
-    catch (e) {
-        if (e.code !== 'ENOENT')
-            throw e;
+    const migrations = new URL('../migrations/', import.meta.url);
+    for (const name of (await readdir(migrations)).filter(name=>name.endsWith('.sql')).sort()) {
+        await db.exec(await readFile(new URL(name,migrations),'utf8'));
     }
 });
 after(async () => { await mf?.dispose(); await rm(directory, { recursive: true, force: true }); });
@@ -395,4 +391,86 @@ test('summary ties use the first source record across devices rather than a summ
     assert.equal(r.status,200);
     assert.deepEqual(r.body.metric_daily_summaries.map(row=>row.type),[composed,decomposed]);
     assert.deepEqual(r.body.workout_daily_summaries.map(row=>row.activity_type),[composed,decomposed]);
+});
+
+test('PostgreSQL varchar guards count Unicode codepoints and abort invalid batches', async()=>{
+ const a=await provision();
+ const atLimit=metric('😀'.repeat(256),{type:'😀'.repeat(128),unit:'😀'.repeat(64),source_name:'😀'.repeat(256),source_bundle_id:'😀'.repeat(256)});
+ const ascii=await provision();
+ assert.equal((await call('/api/apple-health/sync',ascii.ingest_token,payload([metric('a'.repeat(256),{type:'a'.repeat(128),unit:'a'.repeat(64),source_name:'a'.repeat(256),source_bundle_id:'a'.repeat(256)})]))).status,200);
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([atLimit]),{'X-App-Version':'a'.repeat(64)})).status,200);
+ for(const character of ['a','😀']) {
+  for(const [field,limit] of [['id',256],['type',128],['unit',64],['source_name',256],['source_bundle_id',256]]) {
+   const r=await call('/api/apple-health/sync',a.ingest_token,payload([metric('valid-first'),metric('invalid-last',{[field]:character.repeat(limit+1)})],{deletions:[{kind:'metric',id:atLimit.id}]}));
+   assert.equal(r.status,500,field+' over limit must fail');assert.deepEqual(r.body,{detail:'Internal server error'});
+   const rows=await db.prepare('SELECT id FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id).all();assert.deepEqual(rows.results.map(x=>x.id),[atLimit.id]);
+   assert.equal((await db.prepare('SELECT app_version FROM devices WHERE device_id=?').bind('test-device').first()).app_version,'a'.repeat(64));
+  }
+ }
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([]),{'X-App-Version':'a'.repeat(65)})).status,500);
+ assert.equal((await call('/api/hosted/workspaces',null,{label:'😀'.repeat(128)})).status,200);
+ assert.equal((await call('/api/hosted/workspaces',null,{label:'😀'.repeat(129)})).status,500);
+});
+test('PostgreSQL text and nested JSON NUL guards preserve literal escape text',async()=>{
+ const a=await provision();
+ for(const field of ['id','type','unit','source_name','source_bundle_id']) {
+  assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('invalid',{[field]:'bad\u0000value'})]))).status,500,field);
+ }
+ for(const metadata of [{nested:[{value:'bad\u0000value'}]},{nested:[{['bad\u0000key']:'value'}]},{['\u0000']:null}]) {
+  assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('invalid',{metadata})]))).status,500);
+ }
+ const metadata={literal:String.raw`\u0000`,nested:{[String.raw`\u0000`]:['😀',null]}};
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('valid',{source_bundle_id:null,metadata})]))).status,200);
+ assert.deepEqual((await call('/api/agent/metrics',a.agent_token)).body.items[0].metadata,metadata);
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([]),{'X-Test-Scenario':'nul-app-version'})).status,500);
+ assert.throws(()=>new Request('https://example.test',{headers:{'X-App-Version':'bad\u0000header'}}));
+});
+test('PostgreSQL malformed Unicode is rejected before encoding but valid pairs survive',async()=>{
+ const a=await provision();
+ for(const malformed of ['\ud800','\udfff','x\ud800y']) {
+  for(const metadata of [{nested:[{value:malformed}]},{nested:{[malformed]:'value'}}]) {
+   assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('invalid',{metadata})]))).status,500);
+  }
+  assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric(malformed)]))).status,500);
+ }
+ const pair='\ud83d\ude00';
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric(pair,{metadata:{[pair]:pair}})]))).status,200);
+ const row=(await call('/api/agent/metrics',a.agent_token)).body.items[0];assert.equal(row.id,pair);assert.deepEqual(row.metadata,{[pair]:pair});
+});
+test('PostgreSQL value guards cover INSERT and UPDATE on every original text column',async()=>{
+ const limits={
+  devices:{device_id:128,app_version:64},workspaces:{id:64,label:128},
+  workspace_devices:{workspace_id:64,device_id:128,label:128},
+  access_tokens:{id:64,workspace_id:64,kind:32,token_hash:64},
+  sync_batches:{workspace_id:64,export_id:36,device_id:128,timezone:128,source:64},
+  health_metrics:{workspace_id:64,device_id:128,id:256,type:128,unit:64,source_name:256,source_bundle_id:256,export_id:36},
+  health_workouts:{workspace_id:64,device_id:128,id:256,activity_type:128,source_name:256,source_bundle_id:256,export_id:36}
+ };
+ const a=await provision();
+ const workout={id:'guard-workout',activity_type:'walk',start_at:stamp,end_at:stamp,duration_seconds:60,source_name:'Synthetic'};
+ assert.equal((await call('/api/apple-health/sync',a.ingest_token,payload([metric('guard-metric')],{workouts:[workout]}))).status,200);
+ for(const [table,columns] of Object.entries(limits)) {
+  const info=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
+  const where=table==='devices'?'device_id=?':table==='workspaces'?'id=?':'workspace_id=?';
+  const identity=table==='devices'?'test-device':a.workspace_id;
+  const original=await db.prepare(`SELECT * FROM ${table} WHERE ${where} LIMIT 1`).bind(identity).first();
+  const names=Object.keys(original), keyColumns=info.filter(c=>c.pk).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
+  const keyWhere=keyColumns.map(c=>`${c}=?`).join(' AND '),keyValues=keyColumns.map(c=>original[c]);
+  async function rejectsValue(column,value) {
+   await assert.rejects(db.prepare(`UPDATE ${table} SET ${column}=? WHERE ${keyWhere}`).bind(value,...keyValues).run(),/postgres value guard/);
+   const candidate={...original,[column]:value};
+   await assert.rejects(db.prepare(`INSERT INTO ${table} (${names.join(',')}) VALUES (${names.map(()=>'?').join(',')})`).bind(...names.map(name=>candidate[name])).run(),/postgres value guard/);
+  }
+  for(const [column,limit] of Object.entries(columns)) {
+   await rejectsValue(column,'a'.repeat(limit+1));
+   await rejectsValue(column,'😀'.repeat(limit+1));
+  }
+  for(const column of info.filter(c=>c.type==='TEXT').map(c=>c.name)) await rejectsValue(column,'before\u0000after');
+  if('metadata' in original) {
+   for(const value of [{nested:[{['nul\u0000key']:'safe'}]},{nested:[{value:'bad\u0000text'}]}]) await rejectsValue('metadata',JSON.stringify(value));
+   const literal=JSON.stringify({literal:String.raw`\u0000`,nested:{[String.raw`\u0000`]:null}});
+   await db.prepare(`UPDATE ${table} SET metadata=? WHERE ${keyWhere}`).bind(literal,...keyValues).run();
+   assert.equal((await db.prepare(`SELECT metadata FROM ${table} WHERE ${keyWhere}`).bind(...keyValues).first()).metadata,literal);
+  }
+ }
 });

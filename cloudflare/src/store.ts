@@ -33,6 +33,24 @@ export function required(value: unknown, field: string): string { if (typeof val
 export function record(value: unknown): value is Row { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 export function nullableNumber(value: unknown) { if (value === undefined || value === null)
     return null; const n = Number(value); return Number.isFinite(n) ? n : null; }
+function postgresUnicode(value: unknown): void {
+    if (typeof value === 'string') {
+        if (/[\uD800-\uDFFF]/u.test(value)) throw new HttpError(500, 'Internal server error');
+    } else if (Array.isArray(value)) {
+        for (const item of value) postgresUnicode(item);
+    } else if (record(value)) {
+        for (const [key, item] of Object.entries(value)) {
+            postgresUnicode(key);
+            postgresUnicode(item);
+        }
+    }
+}
+function postgresMetadata(value: unknown): string {
+    const metadata = record(value) ? value : {};
+    // JSON.stringify preserves lone surrogates as escapes that PostgreSQL JSONB rejects.
+    postgresUnicode(metadata);
+    return JSON.stringify(metadata);
+}
 const chunks = <T>(rows: T[], size: number): T[][] => Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, (i + 1) * size));
 const placeholders = (n: number) => Array(n).fill('?').join(',');
 const identity = (row: Row) => JSON.stringify('id' in row ? [row.device_id, row.id] : [row.export_id]);
@@ -45,6 +63,7 @@ export class Store {
     statement(sql: string, values: unknown[] = []): D1PreparedStatement {
         if (values.length > 100)
             throw new Error('Binding capacity exceeded');
+        for (const value of values) postgresUnicode(value);
         this.stats.maxBindings = Math.max(this.stats.maxBindings, values.length);
         return this.db.prepare(sql).bind(...values);
     }
@@ -151,7 +170,7 @@ export class Store {
                     if (new Set(original.map(r => r.id)).size !== original.length)
                         throw new HttpError(500, 'Internal server error');
                     for (const row of original) {
-                        const base = { workspace_id, device_id, id: required(row.id, `${kind}.id`), start_at: timestamp(required(row.start_at, `${kind}.start_at`)), end_at: timestamp(required(row.end_at, `${kind}.end_at`)), source_name: required(row.source_name, `${kind}.source_name`), source_bundle_id: typeof row.source_bundle_id === 'string' ? row.source_bundle_id : null, metadata: JSON.stringify(record(row.metadata) ? row.metadata : {}), export_id };
+                        const base = { workspace_id, device_id, id: required(row.id, `${kind}.id`), start_at: timestamp(required(row.start_at, `${kind}.start_at`)), end_at: timestamp(required(row.end_at, `${kind}.end_at`)), source_name: required(row.source_name, `${kind}.source_name`), source_bundle_id: typeof row.source_bundle_id === 'string' ? row.source_bundle_id : null, metadata: postgresMetadata(row.metadata), export_id };
                         const details = table === 'health_metrics' ? { type: required(row.type, 'metrics.type'), value: Number(row.value), unit: required(row.unit, 'metrics.unit') } : { activity_type: required(row.activity_type, 'workouts.activity_type'), duration_seconds: Number(row.duration_seconds), total_energy_kcal: nullableNumber(row.total_energy_kcal), active_energy_kcal: nullableNumber(row.active_energy_kcal), distance_meters: nullableNumber(row.distance_meters) };
                         statements.push(this.upsert(table, { ...base, ...details }, ['workspace_id', 'device_id', 'id']));
                     }
