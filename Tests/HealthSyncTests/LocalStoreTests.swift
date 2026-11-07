@@ -3,6 +3,105 @@ import SQLite3
 @testable import HealthSync
 
 final class LocalStoreTests: XCTestCase {
+    func testLegacyHostedSettingsMoveToCloudflareAndPersistWithoutResettingLocalState() async throws {
+        let url = temporaryDatabaseURL()
+        let store = try SQLiteLocalStore(url: url)
+        var original = AppSettings.default
+        original.backendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+        original.hostedAgentEndpoint = original.backendURL + "/api/agent/health-data?limit=50&tag=a%2Fb"
+        original.hostedWorkspaceID = "wk_existing_migration_fixture"
+        original.selectedTypes = [.stepCount, .heartRate]
+        original.syncFrequency = .manualOnly
+        original.hasRequestedHealthPermissions = true
+        try await store.saveSettings(original)
+        let deviceID = try await store.deviceID()
+        try await store.saveAnchor("existing-anchor", for: .stepCount)
+        let queued = legacyBatch()
+        try await store.enqueueBatch(queued)
+
+        var expected = original
+        expected.backendURL = "https://api.healthysync.app"
+        expected.hostedAgentEndpoint = "https://api.healthysync.app/api/agent/health-data?limit=50&tag=a%2Fb"
+        let migrated = try await store.loadSettings()
+        XCTAssertEqual(migrated, expected)
+        XCTAssertEqual(try persistedSettings(at: url), expected)
+
+        let reopened = try SQLiteLocalStore(url: url)
+        let afterRestart = try await reopened.loadSettings()
+        let restoredDeviceID = try await reopened.deviceID()
+        let restoredAnchor = try await reopened.loadAnchor(for: .stepCount)
+        let restoredQueue = try await reopened.pendingBatches()
+        XCTAssertEqual(afterRestart, expected)
+        XCTAssertEqual(restoredDeviceID, deviceID)
+        XCTAssertEqual(restoredAnchor, "existing-anchor")
+        XCTAssertEqual(restoredQueue, [queued])
+    }
+
+    func testLegacyAgentPathsAndEncodedFiltersMigrateButUnrelatedEndpointsDoNot() async throws {
+        let store = try SQLiteLocalStore(url: temporaryDatabaseURL())
+        let old = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+        for path in ["health-data", "metrics", "workouts", "syncs"] {
+            var settings = AppSettings.default
+            settings.hostedAgentEndpoint = old + "/api/agent/\(path)?from=2026-10-01&tag=a%2Fb#details"
+            try await store.saveSettings(settings)
+            let migrated = try await store.loadSettings()
+            XCTAssertEqual(migrated.hostedAgentEndpoint, "https://api.healthysync.app/api/agent/\(path)?from=2026-10-01&tag=a%2Fb#details")
+        }
+        for endpoint in [
+            "https://my-server.example/api/agent/health-data",
+            "https://another-project.supabase.co/functions/v1/healthsync/api/agent/health-data",
+            old + "/api/agent/health-data-other",
+            old + "/api/hosted/agent-token",
+            "https://user:password@dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync/api/agent/health-data",
+            "https://api.healthysync.app/api/agent/health-data"
+        ] {
+            var settings = AppSettings.default
+            settings.hostedAgentEndpoint = endpoint
+            try await store.saveSettings(settings)
+            let unchanged = try await store.loadSettings()
+            XCTAssertEqual(unchanged, settings)
+        }
+    }
+
+    func testSettingsMigrationKeepsCredentialsUsableWhenPersistenceFailsAndRetriesOnReload() async throws {
+        let url = temporaryDatabaseURL()
+        let store = try SQLiteLocalStore(url: url)
+        var original = AppSettings.default
+        original.backendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+        original.hostedAgentEndpoint = original.backendURL + "/api/agent/health-data"
+        original.hostedWorkspaceID = "wk_existing_migration_fixture"
+        try await store.saveSettings(original)
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+        defer { sqlite3_close(db) }
+        XCTAssertEqual(sqlite3_exec(db, "CREATE TRIGGER reject_migration BEFORE UPDATE ON settings WHEN NEW.key='app_settings' BEGIN SELECT RAISE(ABORT, 'disk write failed'); END", nil, nil, nil), SQLITE_OK)
+
+        let usable = try await store.loadSettings()
+        XCTAssertEqual(usable.backendURL, "https://api.healthysync.app")
+        XCTAssertEqual(usable.hostedAgentEndpoint, "https://api.healthysync.app/api/agent/health-data")
+        XCTAssertEqual(usable.hostedWorkspaceID, original.hostedWorkspaceID)
+        XCTAssertEqual(try persistedSettings(at: url), original)
+        XCTAssertEqual(sqlite3_exec(db, "DROP TRIGGER reject_migration", nil, nil, nil), SQLITE_OK)
+        let retried = try await store.loadSettings()
+        XCTAssertEqual(retried, usable)
+        XCTAssertEqual(try persistedSettings(at: url), usable)
+    }
+
+    private func persistedSettings(at url: URL) throws -> AppSettings {
+        var db: OpaquePointer?
+        guard sqlite3_open(url.path, &db) == SQLITE_OK else { throw SQLiteStoreError.encodingFailed }
+        defer { sqlite3_close(db) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT value FROM settings WHERE key='app_settings'", -1, &statement, nil) == SQLITE_OK else {
+            throw SQLiteStoreError.encodingFailed
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else {
+            throw SQLiteStoreError.encodingFailed
+        }
+        return try JSONDecoder().decode(AppSettings.self, from: Data(String(cString: text).utf8))
+    }
+
     func testOversizedLegacyQueueIsReplacedAtomicallyAndChunksRemainStableAfterRestart() async throws {
         let url = temporaryDatabaseURL()
         let store = try SQLiteLocalStore(url: url)

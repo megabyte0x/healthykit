@@ -448,6 +448,9 @@ struct SettingsView: View {
                 systemImage: "key.viewfinder",
                 color: HealthSyncTheme.successGreen
             ) {
+                Text("If your agent uses an old HealthSync URL, replace it with the endpoint below. Keep the same token; refreshing creates a new one.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 if !hostedWorkspaceID.isEmpty {
                     SettingsCopyBlock(title: "Workspace ID", value: hostedWorkspaceID)
                     Button {
