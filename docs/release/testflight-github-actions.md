@@ -45,3 +45,16 @@ gh workflow run testflight.yml --repo megabyte0x/healthysync \
 ```
 
 An uploaded or processed build is not a public release. Verify its processing result, select it for the intended App Store version, complete App Review and release it before expecting public users to receive the update.
+
+## Release the verified URL migration
+
+The migration-specific workflow modes are restricted to app `6776575569`, version `1.0.3`, and processed build `35`. `prepare_store_version=true` prepares the App Store draft and English release notes without submitting. `submit_store_version=true` verifies the selected build, existing review information, release notes and all six inherited iPhone screenshots, then submits only that version for review. It retains the existing `AFTER_APPROVAL` release policy. Supply only one of the status, prepare or submit flags; conflicting flags skip all release jobs. These fixed candidate identifiers must be reviewed before reusing the scripts for another release.
+
+```bash
+gh workflow run testflight.yml --repo megabyte0x/healthysync \
+  --ref BRANCH -f version=1.0.3 -f prepare_store_version=true
+gh workflow run testflight.yml --repo megabyte0x/healthysync \
+  --ref BRANCH -f version=1.0.3 -f submit_store_version=true
+```
+
+Confirm preparation and review readiness before running the second command. Keep the legacy Supabase bridge available during App Review and client rollout, as described in [the retirement runbook](../operations/supabase-retirement.md).
