@@ -1,0 +1,46 @@
+{
+  "$schema": "../web/node_modules/wrangler/config-schema.json",
+  "name": "healthsync-api",
+  "main": "src/index.ts",
+  "account_id": "1378ab230486e0367cbcb49a0f4cec1d",
+  "compatibility_date": "2026-11-07",
+  "placement": {
+    "region": "aws:us-east-1"
+  },
+  "secrets": {
+    "required": [
+      "TOKEN_HASH_SECRET"
+    ]
+  },
+  "vars": {
+    "HOSTED_PUBLIC_BASE_URL": "https://api.healthysync.app",
+    "MIGRATION_STATE": "active"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "healthsync-hosted",
+      "database_id": "d66fac78-02c1-4012-9bfa-2f3e38644852",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": true
+    }
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "api.healthysync.app",
+      "custom_domain": true
+    }
+  ]
+}

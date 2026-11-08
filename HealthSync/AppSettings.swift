@@ -67,7 +67,7 @@ enum StorageMode: String, CaseIterable, Codable, Identifiable {
 }
 
 struct AppSettings: Codable, Equatable {
-    static let hostedBackendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync"
+    static let hostedBackendURL = "https://api.healthysync.app"
 
     var backendURL: String
     var selectedTypes: Set<HealthDataType>
@@ -113,10 +113,51 @@ struct AppSettings: Codable, Equatable {
     var effectiveBackendURL: String {
         switch storageMode {
         case .customBackend:
-            backendURL
+            Self.migratedHostedURL(backendURL, agent: false) ?? backendURL
         case .hostedHealthSync:
             Self.hostedBackendURL
         }
+    }
+
+    @discardableResult
+    mutating func migrateHostedEndpoints() -> Bool {
+        var changed = false
+        if let migrated = Self.migratedHostedURL(backendURL, agent: false) {
+            backendURL = migrated
+            changed = true
+        }
+        if let endpoint = hostedAgentEndpoint,
+           let migrated = Self.migratedHostedURL(endpoint, agent: true) {
+            hostedAgentEndpoint = migrated
+            changed = true
+        }
+        return changed
+    }
+
+    private static func migratedHostedURL(_ value: String, agent: Bool) -> String? {
+        guard let source = URLComponents(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              source.scheme?.lowercased() == "https",
+              source.host?.lowercased() == "dtzydnjnqkruxaacgkio.supabase.co",
+              source.port == nil || source.port == 443,
+              source.user == nil, source.password == nil,
+              var target = URLComponents(string: hostedBackendURL) else { return nil }
+
+        let prefix = "/functions/v1/healthsync"
+        let path = source.percentEncodedPath.hasSuffix("/")
+            ? String(source.percentEncodedPath.dropLast()) : source.percentEncodedPath
+        let targetPath: String
+        if agent {
+            let paths = ["health-data", "metrics", "workouts", "syncs"].map { "/api/agent/" + $0 }
+            guard let suffix = paths.first(where: { path == prefix + $0 }) else { return nil }
+            targetPath = suffix
+        } else {
+            guard path == prefix else { return nil }
+            targetPath = ""
+        }
+        target.percentEncodedPath = targetPath
+        target.percentEncodedQuery = source.percentEncodedQuery
+        target.percentEncodedFragment = source.percentEncodedFragment
+        return target.string
     }
 
     init(

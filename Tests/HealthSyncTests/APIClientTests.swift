@@ -522,6 +522,44 @@ final class APIClientTests: XCTestCase {
 }
 
 final class AppSettingsHostedEndpointTests: XCTestCase {
+    func testOfficialLegacyURLPastedAsCustomBackendUsesCloudflareWithoutChangingToken() throws {
+        let token = "hs_ingest_existing_migration_fixture"
+        var settings = AppSettings.default
+        settings.storageMode = .customBackend
+        settings.backendURL = "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync/"
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let request = try APIClient.makeSyncRequest(
+            baseURL: settings.effectiveBackendURL, token: token,
+            deviceID: "existing-device", appVersion: "1.0.2",
+            payload: .empty(deviceID: "existing-device", dateRange: .init(start: now, end: now), timezone: "UTC")
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.healthysync.app/api/apple-health/sync")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(token)")
+        XCTAssertEqual(settings.storageMode, .customBackend)
+    }
+
+    func testUnrelatedOrAmbiguousCustomBackendURLsRemainUnchanged() {
+        let urls = [
+            "https://my-server.example/functions/v1/healthsync",
+            "https://another-project.supabase.co/functions/v1/healthsync",
+            "https://dtzydnjnqkruxaacgkio.supabase.co.evil.example/functions/v1/healthsync",
+            "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync-other",
+            "https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/another-function",
+            "https://dtzydnjnqkruxaacgkio.supabase.co:8443/functions/v1/healthsync",
+            "https://user:password@dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync",
+            "http://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync",
+            "https://api.healthysync.app",
+            "not a URL"
+        ]
+        for url in urls {
+            var settings = AppSettings.default
+            settings.storageMode = .customBackend
+            settings.backendURL = url
+            XCTAssertEqual(settings.effectiveBackendURL, url)
+        }
+    }
+
     func testCleanInstallDefaultsToHostedStorageSoManualSyncHasASetupPath() {
         XCTAssertEqual(AppSettings.default.storageMode, .hostedHealthSync)
         XCTAssertEqual(AppSettings.default.effectiveBackendURL, AppSettings.hostedBackendURL)

@@ -14,6 +14,18 @@ on:
         description: Export a signed IPA artifact without uploading it to TestFlight
         type: boolean
         default: false
+      status_only:
+        description: Check App Store versions and build processing without building or uploading
+        type: boolean
+        default: false
+      prepare_store_version:
+        description: Prepare only the verified 1.0.3 build 35 App Store draft, without submitting for review
+        type: boolean
+        default: false
+      submit_store_version:
+        description: Submit only the prepared 1.0.3 build 35 for App Review, releasing after approval
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,8 +49,57 @@ jobs:
           [[ -n "$APP_STORE_CONNECT_API_ISSUER_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_ISSUER_ID secret."; exit 1; }
           [[ -n "$APP_STORE_CONNECT_API_PRIVATE_KEY" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_PRIVATE_KEY secret."; exit 1; }
 
+  status:
+    name: Check App Store processing
+    if: ${{ inputs.status_only && !inputs.prepare_store_version && !inputs.submit_store_version }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read release status
+        run: node scripts/app-store-status.mjs
+
+  prepare-store:
+    name: Prepare migration App Store draft
+    if: ${{ inputs.prepare_store_version && !inputs.status_only && !inputs.submit_store_version }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION: ${{ inputs.version }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare verified build and release notes
+        run: |
+          node --test scripts/test-app-store-release.mjs
+          node scripts/prepare-app-store-migration.mjs
+
+  submit-store:
+    name: Submit migration for App Review
+    if: ${{ inputs.submit_store_version && !inputs.status_only && !inputs.prepare_store_version }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION: ${{ inputs.version }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submit only the prepared migration
+        run: |
+          node --test scripts/test-app-store-release.mjs
+          node scripts/submit-app-store-migration.mjs
+
   upload:
     name: Test and prepare TestFlight build
+    if: ${{ !inputs.status_only && !inputs.prepare_store_version && !inputs.submit_store_version }}
     needs: validate
     runs-on: macos-26
     timeout-minutes: 60

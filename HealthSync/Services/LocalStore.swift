@@ -37,7 +37,12 @@ actor SQLiteLocalStore: BatchPersisting {
         guard let value = try selectSetting("app_settings"), let data = value.data(using: .utf8) else {
             return .default
         }
-        return try JSONDecoder().decode(AppSettings.self, from: data)
+        var settings = try JSONDecoder().decode(AppSettings.self, from: data)
+        if settings.migrateHostedEndpoints() {
+            // Keep loaded credentials usable if the local write fails; the next load retries persistence.
+            try? await saveSettings(settings)
+        }
+        return settings
     }
 
     func saveSettings(_ settings: AppSettings) async throws {

@@ -519,6 +519,7 @@ final class AppState: ObservableObject {
 
     private func saveSettingsOnly() async throws {
         guard let store else { throw APIClientError.invalidResponse }
+        settings.migrateHostedEndpoints()
         try await store.saveSettings(settings)
     }
 
