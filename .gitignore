@@ -24,3 +24,4 @@ web/*.tsbuildinfo
 .wrangler/
 supabase/.temp/
 cloudflare/.dev.vars*
+cloudflare/worker-configuration.d.ts

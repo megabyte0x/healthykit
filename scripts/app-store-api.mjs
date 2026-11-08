@@ -1,5 +1,7 @@
 import { sign } from 'node:crypto';
 
+export const appId = '6776575569';
+
 export function appStoreAPI(env = process.env) {
     const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
     const now = Math.floor(Date.now() / 1000);

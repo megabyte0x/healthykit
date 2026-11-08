@@ -1,5 +1,5 @@
-import { HttpError, type Row } from './store';
-import { SourceCollation } from './collation';
+import { HttpError, byteLength, type Row } from './store';
+import type { SourceCollation } from './collation';
 export class LocalDates {
     private readonly formatters = new Map<string, Intl.DateTimeFormat>();
     get(value: string, timezone: string): string {
@@ -24,7 +24,6 @@ export class LocalDates {
 }
 type RecordOrder = {start_at: string; device_id: string; id: string};
 const recordOrder = (row: Row): RecordOrder => ({start_at:row.start_at,device_id:row.device_id,id:row.id});
-const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 type Stats = {
     count: number;
     sum: number;
@@ -51,7 +50,7 @@ export class Summaries {
         active: Stats;
     }>();
     private keyBytes = 0;
-    constructor(private dates: LocalDates, private maxGroups = 50000, private maxKeyBytes = 8 * 1024 * 1024, private collation = new SourceCollation()) { }
+    constructor(private dates: LocalDates, private maxGroups: number, private maxKeyBytes: number, private collation: SourceCollation) { }
     private check(bytes: number) { this.keyBytes += bytes; if (this.metrics.size + this.workouts.size > this.maxGroups || this.keyBytes > this.maxKeyBytes)
         throw new HttpError(503, 'Summary capacity exceeded; narrow the requested range'); }
     private compareRecords(left: RecordOrder, right: RecordOrder): number {

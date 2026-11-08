@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -96,6 +97,10 @@ test('all routes preserve auth, wire fields, durable retry, rotation and reset',
     assert.equal(r.body.deleted, 130);
     const used = await db.prepare('SELECT last_used_at FROM access_tokens WHERE workspace_id=?').bind(a.workspace_id).all();
     assert(used.results.every(t => t.last_used_at));
+    // Persisted hash format must stay byte-identical to HMAC-SHA256 hex, or migrated tokens stop authenticating.
+    assert.match(a.ingest_token, /^hs_ingest_[A-Za-z0-9_-]{43}$/);
+    const stored = await db.prepare("SELECT token_hash FROM access_tokens WHERE workspace_id=? AND kind='ingest'").bind(a.workspace_id).first();
+    assert.equal(stored.token_hash, createHmac('sha256', 'synthetic-test-secret').update(a.ingest_token).digest('hex'));
     const rotation = await call('/api/hosted/agent-token', a.ingest_token, {});
     assert.equal(rotation.status, 200);
     assert.equal((await call('/api/agent/metrics', a.agent_token)).status, 403);

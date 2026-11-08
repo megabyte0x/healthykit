@@ -51,6 +51,8 @@ function postgresMetadata(value: unknown): string {
     postgresUnicode(metadata);
     return JSON.stringify(metadata);
 }
+const encoder = new TextEncoder();
+export const byteLength = (value: unknown) => encoder.encode(JSON.stringify(value)).length;
 const chunks = <T>(rows: T[], size: number): T[][] => Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, (i + 1) * size));
 const placeholders = (n: number) => Array(n).fill('?').join(',');
 const identity = (row: Row) => JSON.stringify('id' in row ? [row.device_id, row.id] : [row.export_id]);
@@ -107,13 +109,13 @@ export class Store {
     private async read(auth: Auth, sql: string, values: unknown[] = []): Promise<Row[]> {
         const result = await this.mutate(auth, [this.statement(sql, values)]);
         const rows = result[0].results;
-        const bytes = new TextEncoder().encode(JSON.stringify(rows)).length;
+        const bytes = byteLength(rows);
         this.stats.maxPageBytes = Math.max(this.stats.maxPageBytes, bytes);
         if (bytes > capacity.responseBytes)
             throw new HttpError(503, 'Result capacity exceeded; narrow the requested range');
         return rows;
     }
-    async health() { await this.batch([this.statement('SELECT 1 FROM workspaces LIMIT 1')]); return true; }
+    async health() { await this.batch([this.statement('SELECT 1 FROM workspaces LIMIT 1')]); }
     private upsert(table: string, row: Row, keys: string[], ignore = false) {
         const columns = Object.keys(row), updates = columns.filter(c => !keys.includes(c));
         return this.statement(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders(columns.length)}) ON CONFLICT (${keys.join(',')}) DO ${ignore ? 'NOTHING' : `UPDATE SET ${updates.map(c => `${c}=excluded.${c}`).join(',')}`}`, Object.values(row));
@@ -222,7 +224,7 @@ export class Store {
                 const cursorSql = cursor ? (o.keys.length === 1 ? ' AND r.export_id COLLATE BINARY>?' : ' AND (r.device_id,r.id)>(?,?)') : '';
                 const cursorValues = cursor ? (o.keys.length === 1 ? [cursor.export_id] : [cursor.device_id, cursor.id]) : [];
                 const page = await this.read(auth, `SELECT ${columns} FROM ${table} r WHERE ${f.sql} AND r.${o.stamp}=?${cursorSql} ORDER BY ${o.keys.map(k => 'r.' + k + ' COLLATE BINARY').join(',')} LIMIT ?`, [...f.values, stamp, ...cursorValues, capacity.pageRows]);
-                bytes += new TextEncoder().encode(JSON.stringify(page)).length;
+                bytes += byteLength(page);
                 if (bytes > capacity.tieBytes || group.length + page.length > capacity.tieKeys)
                     throw new HttpError(503, 'Ordering capacity exceeded; narrow the requested range');
                 group.push(...page);
