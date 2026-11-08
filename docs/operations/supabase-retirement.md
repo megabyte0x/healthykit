@@ -7,7 +7,7 @@ Cloudflare Workers/D1 already owns hosted HealthSync data and authentication. Th
 | User or integration | Required action | Preserved state |
 | --- | --- | --- |
 | Hosted iPhone app | Install the migration release and open it once; automatic updates may install it without a manual download. | Same workspace, Keychain tokens, permissions, device ID, HealthKit anchors and queued uploads. |
-| Agent with a complete saved endpoint | Replace the old URL with `https://api.healthysync.app/api/agent/health-data`; retain query filters. | Same bearer token, workspace and response schema. |
+| Agent with a complete saved endpoint | Replace only the legacy base with `https://api.healthysync.app`; retain the existing `/api/agent/...` route and query filters. | Same bearer token, workspace and response schema. |
 | OpenAPI action or tool with base URL and paths | Use `https://api.healthysync.app` as the base URL, removing `/functions/v1/healthsync`; retain `/api/agent/...` paths. | Same private bearer credential. |
 | Script or automation | Update `AGENT_ENDPOINT` or the HTTP node URL; test a read against the existing workspace. | Same Authorization header and filters. |
 | Unrelated self-hosted installation | No migration action. | Its backend settings and credentials remain unchanged. |
@@ -31,6 +31,8 @@ The official legacy base is `https://dtzydnjnqkruxaacgkio.supabase.co/functions/
 ## Release and adoption
 
 The public App Store version checked on 8 November 2026 is 1.0.2. Prepare the migration as 1.0.3 with the existing bundle ID and signing team; a differently signed app or reinstall is not a migration path. The repository's manual TestFlight workflow can test, archive and upload the candidate using existing App Store Connect secrets. A TestFlight upload does not update public App Store users: the build must pass App Review and be released for them.
+
+Version 1.0.3 build 35, from commit `8035b9c`, was uploaded successfully to App Store Connect on 8 November 2026. The local archive used the existing development identity and Apple cloud-managed distribution signing after the fresh CI runner hit Apple's development-certificate limit. The exported App Store package passed signature, app/team identity, default Keychain group and HealthKit/background-delivery entitlement checks. This records upload only; processing, TestFlight availability and public release must be checked separately.
 
 Publish the shared HTML/Markdown agent-access guide and include its URL in release notes. It must show the old/new URL, preservation of the bearer credential and the warning against reset/token rotation. Do not send migration messages to users through email or other services without separate explicit authorization.
 

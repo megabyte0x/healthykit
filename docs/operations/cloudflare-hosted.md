@@ -4,7 +4,9 @@ This is the controller's cutover and recovery runbook. Commands below are operat
 
 The authoritative endpoint after accepted cutover is `https://api.healthysync.app`. The released application still uses `https://dtzydnjnqkruxaacgkio.supabase.co/functions/v1/healthsync`; that Supabase-owned hostname requires a live `healthsync` Edge Function. The bridge forwards server-side to the owned domain without redirecting or replaying a request. Preserve the existing HMAC secret and all seven application tables; existing opaque bearer tokens must continue to work. Never rotate credentials to perform this migration.
 
-Future app builds use the owned domain. Changing `AppSettings.hostedBackendURL` does not edit saved settings or Keychain entries. `prepareHostedStorageIfNeeded` checks saved endpoint/token presence, not equality with the new URL. A complete saved workspace remains ready; its existing agent endpoint continues through the bridge until the user deliberately refreshes it.
+The 1.0.3 migration candidate rewrites recognized saved official app and agent URLs to the owned domain when settings load, preserving credentials and workspace state. Earlier releases continue through the bridge. External agents need a URL-only update as described in [the retirement guide](supabase-retirement.md); refreshing a token is not part of migration.
+
+The catalog retains the released Supabase implementation's 5,000-raw-row cap before deduplication for metric types, activities and timezones. Large workspaces may therefore have incomplete discovery catalogs; changing that existing API behavior is deferred from the compatibility migration. Direct filtered data routes remain available.
 
 ## Private working area and gates
 
@@ -27,13 +29,12 @@ Keep private directories mode 0700 and all snapshot/SQL/export/log/config/manife
 Before any production change, require reviewed application/bridge commits, successful local tests, verified backups, an isolated restored PostgreSQL 17 reference, full seven-table D1 digest equality, source/runtime collation and boundary acceptance, measured summary costs and resource limits, and an explicit rollback owner. Check that `healthsync-hosted` is the intended isolated database in account `1378ab230486e0367cbcb49a0f4cec1d` (`d66fac78-02c1-4012-9bfa-2f3e38644852`, US jurisdiction/ENAM). The controller reported existing Workers Paid; verify current account capacity instead of purchasing another plan. Confirm domain/Worker ownership and unrelated resources before editing configuration.
 
 ```bash
-node --test cloudflare/test/legacy.test.mjs
 npm --prefix cloudflare test
 npm --prefix cloudflare run typecheck
 python3 -m unittest scripts/test_cloudflare_snapshot.py
 ```
 
-`npm test` currently runs the Worker suite only; run the bridge command separately. The synthetic suites must not contact production or mutate existing app/simulator data.
+The Cloudflare test command runs both Worker and legacy-bridge suites. Install dependencies with `npm ci --prefix web` first; the suites use the pinned tooling there. The synthetic suites must not contact production or mutate existing app/simulator data.
 
 ## Consistent PostgreSQL backup and independent restores
 
@@ -88,6 +89,7 @@ python3 scripts/cloudflare_snapshot.py verify "$run/roundtrip.json" "$run/manife
 For the full large dataset, use the controller's bounded canonical JSONL exporter/importer instead of materializing every row in one process. These are alternative import paths, each requiring an empty destination. Do not interchange manifest formats without an explicit conversion and comparison. The `schema` variable is only the original seven-table baseline; every fresh import must also apply all later migrations. Require 14 text/JSON compatibility triggers plus the two signed-integer triggers, and no foreign-key violations, before using a clone.
 
 ```bash
+set -euo pipefail
 python3 "$recovery/stream_rehearsal.py" import "$run/canonical-a" "$run/rehearsal.sqlite" "$schema" >"$run/local-import.log" 2>&1
 for migration in "$migrations"/*.sql; do
   if [ "$migration" != "$schema" ]; then sqlite3 "$run/rehearsal.sqlite" <"$migration"; fi
@@ -111,6 +113,15 @@ INSERT INTO d1_migrations(name) VALUES ('0001_hosted.sql');
 SQL
 "$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
   --file "$run/rehearsal.sql" --yes >"$run/local-d1-import.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
+  --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index') ORDER BY type,name;" \
+  --json >"$run/local-d1-baseline-schema.json" 2>"$run/local-d1-baseline-schema.log"
+```
+
+Stop here. The controller must compare the imported seven application tables and their index definitions in `local-d1-baseline-schema.json` with a fresh SQLite database created from the exact `$schema` file. Account separately for D1's internal tables/indexes; require no missing, changed or unexpected application definitions. A failed import or schema mismatch stops the rehearsal. Only after this comparison passes, continue in a shell that also stops on command failure:
+
+```bash
+set -euo pipefail
 "$wrangler" d1 execute healthsync-hosted --config "$run/local-wrangler.json" --local \
   --file "$run/imported-baseline.sql" --yes >"$run/local-d1-baseline.log" 2>&1
 "$wrangler" d1 migrations apply healthsync-hosted --config "$run/local-wrangler.json" --local \
@@ -161,13 +172,23 @@ Require successful backup verification, both restore results and canonical manif
 
 ## Import and verify the locked hosted target
 
-Use the exact intended D1 ID in controller-reviewed configuration; the checked-in Worker remains locked by default. Confirm the target is empty and isolated before an import. Never import over a populated live database or clear a failed/partial import without a retained export and reviewed recovery action. Keep the source frozen.
+Use the exact intended D1 ID in controller-reviewed configuration. The checked-in Worker is active after cutover; it is not a locked import configuration. For a fresh, isolated target, explicitly deploy it with `MIGRATION_STATE=locked` before importing and verify `/health` returns HTTP 503 with `migration_state=locked`. Confirm the target is empty and isolated. Never run this fresh-target procedure against the currently active database, import over a populated live database, or clear a failed/partial import without a retained export and reviewed recovery action. Keep the source frozen.
 
 ```bash
+set -euo pipefail
 python3 "$recovery/build_d1_sql.py" "$finalCanonical" "$schema" "$run/final.sql" >"$run/final-build.log" 2>&1
 chmod 600 "$run/final.sql"
 "$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
   --file "$run/final.sql" --yes >"$run/remote-import.log" 2>&1
+"$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
+  --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index') ORDER BY type,name;" \
+  --json >"$run/remote-baseline-schema.json" 2>"$run/remote-baseline-schema.log"
+```
+
+Stop here and perform the same exact baseline-schema comparison described for the local rehearsal, using `remote-baseline-schema.json`. A successful import exit code is necessary but insufficient. Do not seed migration history until the comparison passes. Then continue:
+
+```bash
+set -euo pipefail
 "$wrangler" d1 execute healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
   --file "$run/imported-baseline.sql" --yes >"$run/remote-baseline.log" 2>&1
 "$wrangler" d1 migrations apply healthsync-hosted --config cloudflare/wrangler.jsonc --remote \
