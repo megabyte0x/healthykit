@@ -7,12 +7,16 @@ type WorkerEnv = {
 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-version, x-device-id', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
 const encoder = new TextEncoder();
-function json(payload: unknown, status = 200) {
-    const body = JSON.stringify(payload);
-    if (encoder.encode(body).length > capacity.responseBytes)
+function serialize(payload: unknown) {
+    const body = JSON.stringify(payload), bytes = encoder.encode(body).length;
+    if (bytes > capacity.responseBytes)
         throw new HttpError(503, 'Result capacity exceeded; narrow the requested range');
+    return { body, bytes };
+}
+function respond({ body }: { body: string }, status = 200) {
     return new Response(body, { status, headers: { ...cors, 'Content-Type': 'application/json', ...(status === 503 ? { 'Retry-After': '5' } : {}) } });
 }
+const json = (payload: unknown, status = 200) => respond(serialize(payload), status);
 async function jsonBody(request: Request): Promise<Row> {
     const reader = request.body?.getReader();
     const parts: Uint8Array[] = [];
@@ -34,12 +38,7 @@ async function jsonBody(request: Request): Promise<Row> {
         finally {
             reader.releaseLock();
         }
-    const input = new Uint8Array(bytes);
-    let offset = 0;
-    for (const part of parts) {
-        input.set(part, offset);
-        offset += part.byteLength;
-    }
+    const input = await new Blob(parts).arrayBuffer();
     let payload: unknown;
     try {
         payload = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(input));
@@ -51,24 +50,22 @@ async function jsonBody(request: Request): Promise<Row> {
         throw new HttpError(400, 'Expected JSON object');
     return payload;
 }
-function randomToken(prefix: string) { const bytes = crypto.getRandomValues(new Uint8Array(32)); return prefix + '_' + btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', ''); }
-async function tokenHash(token: string, secret: string) { const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(token)))].map(b => b.toString(16).padStart(2, '0')).join(''); }
-function normalizePath(path: string) { for (const prefix of ['/functions/v1/healthsync', '/healthsync'])
-    if (path.startsWith(prefix))
-        return path.slice(prefix.length) || '/'; return path; }
+function randomToken(prefix: string) { return prefix + '_' + crypto.getRandomValues(new Uint8Array(32)).toBase64({ alphabet: 'base64url', omitPadding: true }); }
+async function tokenHash(token: string, secret: string) { const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(token))).toHex(); }
 export default {
-    async fetch(request: Request, env: WorkerEnv, _ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, env: WorkerEnv): Promise<Response> {
         if (request.method === 'OPTIONS')
             return new Response(null, { status: 204, headers: cors });
         const store = new Store(env.DB);
         let route = 'unknown';
         try {
-            const url = new URL(request.url), path = normalizePath(url.pathname);
+            const url = new URL(request.url), path = url.pathname;
             if (path === '/health' && request.method === 'GET') {
                 route = 'health';
                 let database = false;
                 try {
-                    database = await store.health();
+                    await store.health();
+                    database = true;
                 }
                 catch { }
                 const active = env.MIGRATION_STATE === 'active', ready = database && active && !!env.TOKEN_HASH_SECRET;
@@ -127,8 +124,8 @@ export default {
             }
             else
                 return json({ detail: 'Not found' }, 404);
-            const response = json(result);
-            console.info('healthsync_capacity', { route, ...store.finish(encoder.encode(JSON.stringify(result)).length) });
+            const serialized = serialize(result), response = respond(serialized);
+            console.info('healthsync_capacity', { route, ...store.finish(serialized.bytes) });
             return response;
         }
         catch (error) {

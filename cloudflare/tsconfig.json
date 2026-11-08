@@ -1,4 +1,4 @@
 {
-  "compilerOptions": {"target":"ES2022","module":"ESNext","moduleResolution":"Bundler","lib":["ES2022"],"strict":true,"noEmit":true,"skipLibCheck":true,"types":[]},
+  "compilerOptions": {"target":"ES2022","module":"ESNext","moduleResolution":"Bundler","lib":["ES2022","ESNext.TypedArrays"],"strict":true,"noEmit":true,"skipLibCheck":true,"types":[]},
   "include":["src/**/*.ts","worker-configuration.d.ts"]
 }

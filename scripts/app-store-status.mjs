@@ -1,17 +1,15 @@
-import { appStoreAPI } from './app-store-api.mjs';
+import { appStoreAPI, appId } from './app-store-api.mjs';
 
-const appId = '6776575569';
 const request = appStoreAPI();
-const get = (path, query) => request(path, { query });
 
-const versions = await get(`apps/${appId}/appStoreVersions`, {
+const versions = await request(`apps/${appId}/appStoreVersions`, { query: {
     limit: '10', 'fields[appStoreVersions]': 'versionString,appStoreState,releaseType',
-});
-const builds = await get('builds', {
+} });
+const builds = await request('builds', { query: {
     'filter[app]': appId, sort: '-uploadedDate', limit: '5',
     'fields[builds]': 'version,processingState,uploadedDate,expired,preReleaseVersion',
     include: 'preReleaseVersion', 'fields[preReleaseVersions]': 'version,platform',
-});
+} });
 const draft = versions.data.find(x => x.attributes.versionString === '1.0.3');
 let migrationDraft;
 if (draft) {

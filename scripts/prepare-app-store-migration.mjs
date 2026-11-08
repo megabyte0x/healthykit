@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { appStoreAPI } from './app-store-api.mjs';
+import { appStoreAPI, appId } from './app-store-api.mjs';
 
-export const appId = '6776575569';
+export { appId };
 export const buildId = '8db9cee3-41ae-40b3-a512-e52c2ecd7751';
 export const version = '1.0.3';
 export const releaseNotes = 'Improved hosted syncing reliability.\nExisting data, access tokens and Health permissions are preserved.\nFor external agents using the legacy URL, update only the endpoint. See https://healthysync.app/docs/agent-access#cloudflare-migration.';
