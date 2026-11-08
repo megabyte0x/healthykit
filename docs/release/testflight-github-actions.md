@@ -34,3 +34,14 @@ gh workflow run testflight.yml --repo megabyte0x/healthykit \
 ```
 
 Download the `testflight-diagnostics` artifact from the successful run. Its `HealthSync-export` folder contains the signed IPA. Keep the artifact private when distributing it for review. For a later TestFlight upload, use the same validated commit and set `export_only=false`.
+
+## Check processing without another upload
+
+Enable `status_only` to read recent App Store versions and build processing states using the existing API secrets. This mode skips the macOS build/upload job and makes only read requests to Apple's API. It also works after an upload performed locally with an existing signing identity:
+
+```bash
+gh workflow run testflight.yml --repo megabyte0x/healthysync \
+  --ref BRANCH -f version=1.0.3 -f status_only=true
+```
+
+An uploaded or processed build is not a public release. Verify its processing result, select it for the intended App Store version, complete App Review and release it before expecting public users to receive the update.

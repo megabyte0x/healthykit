@@ -14,6 +14,10 @@ on:
         description: Export a signed IPA artifact without uploading it to TestFlight
         type: boolean
         default: false
+      status_only:
+        description: Check App Store versions and build processing without building or uploading
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,8 +41,23 @@ jobs:
           [[ -n "$APP_STORE_CONNECT_API_ISSUER_ID" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_ISSUER_ID secret."; exit 1; }
           [[ -n "$APP_STORE_CONNECT_API_PRIVATE_KEY" ]] || { echo "::error::Missing APP_STORE_CONNECT_API_PRIVATE_KEY secret."; exit 1; }
 
+  status:
+    name: Check App Store processing
+    if: inputs.status_only
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read release status
+        run: node scripts/app-store-status.mjs
+
   upload:
     name: Test and prepare TestFlight build
+    if: ${{ !inputs.status_only }}
     needs: validate
     runs-on: macos-26
     timeout-minutes: 60
