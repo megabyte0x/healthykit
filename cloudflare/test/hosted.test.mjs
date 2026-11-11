@@ -19,12 +19,13 @@ async function provision() { const r = await call('/api/hosted/workspaces', null
 before(async () => {
     directory = await mkdtemp(tmpdir() + '/healthsync-runtime-');
     const script = (await build({ stdin: { contents: `import worker from './src/index.ts';
-import { capacity, Store } from './src/store.ts';
+import { capacity } from './src/store.ts';
 import { SourceCollation } from './src/collation.ts';
 export default {async fetch(request, env, ctx) {
  const scenario=request.headers.get('X-Test-Scenario'), workspace=request.headers.get('X-Test-Workspace');
- const saved={...capacity};let fired=false,billedRows=0,maxBindings=0;
+ const saved={...capacity};let fired=false,billedRows=0,maxBindings=0,summaryRows=0;
  const original=env.DB, sql=new WeakMap();
+ const countResults=(statements,results)=>{for(let i=0;i<results.length;i++){billedRows+=results[i].meta.rows_read||0;const query=sql.get(statements[i])||'';if(query.includes('s.timezone,r.type,r.unit,r.value')||query.includes('s.timezone,r.activity_type,r.duration_seconds'))summaryRows+=results[i].results.length}};
  if(scenario==='nul-app-version')request=new Proxy(request,{get(target,key){if(key==='headers')return {get(name){return name.toLowerCase()==='x-app-version'?'invalid\\u0000version'.replace('\\u0000',String.fromCharCode(0)):target.headers.get(name)}};return Reflect.get(target,key,target)}});
  if(scenario==='fingerprint')return Response.json(new SourceCollation().fingerprint());
  if(scenario==='locked')env={...env,MIGRATION_STATE:'locked'};
@@ -42,6 +43,10 @@ export default {async fetch(request, env, ctx) {
    const writing=statements.some(s=>(sql.get(s)||'').startsWith('INSERT INTO devices'));
    const fetching=statements.some(s=>(sql.get(s)||'').startsWith('WITH selected('));
    const reading=statements.some(s=>(sql.get(s)||'').includes('ORDER BY r.start_at DESC'));
+   const summary=statements.some(s=>(sql.get(s)||'').includes('s.timezone,r.type,r.unit,r.value'));
+   const revision=statements.some(s=>(sql.get(s)||'').startsWith('SELECT revision FROM workspace_summary_revisions'));
+   if(revision&&scenario==='revoke-on-summary-hit'&&!fired){fired=true;const results=await original.batch(statements);countResults(statements,results);await original.prepare('UPDATE access_tokens SET revoked_at=? WHERE workspace_id=?').bind('2026-01-01T00:00:00.000000Z',workspace).run();return results}
+   if(summary&&scenario==='mutate-after-summary'&&!fired){fired=true;const results=await original.batch(statements);countResults(statements,results);await original.prepare('UPDATE health_metrics SET value=42 WHERE workspace_id=?').bind(workspace).run();return results}
    if(!fired&&((writing&&scenario!=='mutate-selection'&&scenario!=='revoke-during-read')||(fetching&&['mutate-selection','insert-selection','delete-selection'].includes(scenario))||(reading&&scenario==='revoke-during-read'))) {
     fired=true;
     if(scenario==='wrong-workspace-before-write')await original.prepare('UPDATE access_tokens SET workspace_id=? WHERE workspace_id=?').bind(request.headers.get('X-Test-Other-Workspace'),workspace).run();
@@ -53,10 +58,10 @@ export default {async fetch(request, env, ctx) {
     if(scenario==='delete-selection')await original.prepare('DELETE FROM health_metrics WHERE workspace_id=?').bind(workspace).run();
     if(scenario==='mutate-selection')await original.prepare('UPDATE health_metrics SET start_at=? WHERE workspace_id=?').bind('2020-01-01T00:00:00.000000Z',workspace).run();
    }
-   const results=await original.batch(statements);for(const result of results)billedRows+=result.meta.rows_read||0;return results
+   const results=await original.batch(statements);countResults(statements,results);return results
   }}};
  }
- try{const response=await worker.fetch(request,env,ctx);response.headers.set('X-Test-Rows-Read',String(billedRows));response.headers.set('X-Test-Max-Bindings',String(maxBindings));return response}finally{Object.assign(capacity,saved)}
+ try{const response=await worker.fetch(request,env,ctx);response.headers.set('X-Test-Rows-Read',String(billedRows));response.headers.set('X-Test-Max-Bindings',String(maxBindings));response.headers.set('X-Test-Summary-Rows',String(summaryRows));return response}finally{Object.assign(capacity,saved)}
 }};`, resolveDir: new URL('..', import.meta.url).pathname, sourcefile: 'runtime-test-wrapper.ts' }, bundle: true, write: false, format: 'esm', platform: 'browser', logLevel: 'silent' })).outputFiles[0].text;
     mf = new Miniflare({ ...convertV4MiniflareOptions({ modules: true, script, compatibilityDate: '2026-10-26', d1Databases: { DB: 'synthetic' }, bindings: { TOKEN_HASH_SECRET: 'synthetic-test-secret', HOSTED_PUBLIC_BASE_URL: 'https://api.healthysync.app', MIGRATION_STATE: 'active' }, outboundService: () => new Response('Network disabled', { status: 502 }) }), resourcePersistencePath: directory });
     db = await mf.getD1Database('DB');
@@ -148,6 +153,148 @@ test('streamed preference spans pages, respects partial ranges and current expor
     await call('/api/apple-health/sync', a.ingest_token, payload([metric('new', { value: 0 })], { timezone: 'Pacific/Honolulu' }));
     r = await call('/api/agent/metrics?limit=500', a.agent_token);
     assert.equal(r.body.items.find(x => x.device_id === 'test-device').local_date, '2026-03-07');
+});
+test('health-data pagination reuses exact summaries and reduces database reads', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('seed')]));
+    await db.prepare("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<6000) INSERT INTO health_metrics SELECT workspace_id,device_id,'cached-'||x,type,value,unit,strftime('%Y-%m-%dT%H:%M:%f','2026-03-08','+'||x||' seconds')||'000Z',strftime('%Y-%m-%dT%H:%M:%f','2026-03-08','+'||x||' seconds')||'000Z',source_name,source_bundle_id,metadata,export_id FROM health_metrics,n WHERE workspace_id=? AND id='seed'").bind(a.workspace_id).run();
+    const first = await call('/api/agent/health-data?limit=1', a.agent_token);
+    const next = await call('/api/agent/health-data?limit=2&offset=1', a.agent_token);
+    assert.equal(first.status, 200);
+    assert.equal(next.status, 200);
+    assert.equal(Number(first.headers.get('X-Test-Summary-Rows')), 6001);
+    assert.equal(Number(next.headers.get('X-Test-Summary-Rows')), 0);
+    assert.deepEqual(next.body.metric_daily_summaries, first.body.metric_daily_summaries);
+    assert.deepEqual(next.body.workout_daily_summaries, first.body.workout_daily_summaries);
+    assert.equal(next.body.metrics.length, 2);
+    assert.notEqual(next.body.metrics[0].id, first.body.metrics[0].id);
+    assert(Number(next.headers.get('X-Test-Rows-Read')) < Number(first.headers.get('X-Test-Rows-Read')) / 2);
+});
+test('summary cache isolates workspaces and filters while normalizing equivalent ranges', async () => {
+    const a = await provision(), b = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one', { value: 7 }), metric('two', { type: 'other', value: 11 })]));
+    await call('/api/apple-health/sync', b.ingest_token, payload([metric('one', { value: 99 })]));
+    const path = '/api/agent/health-data?from=2026-03-08&to=2026-03-09&type=steps';
+    const first = await call(path, a.agent_token);
+    const equivalent = await call('/api/agent/health-data?type=steps&from=2026-03-08T00:00:00Z&to=2026-03-09T00:00:00Z&offset=1', a.agent_token);
+    assert.equal(first.body.metric_daily_summaries[0].total_value, 7);
+    assert.equal(equivalent.headers.get('X-Test-Summary-Rows'), '0');
+    assert.deepEqual(equivalent.body.metric_daily_summaries, first.body.metric_daily_summaries);
+    const other = await call(path, b.agent_token);
+    assert.equal(other.body.metric_daily_summaries[0].total_value, 99);
+    assert.equal(other.headers.get('X-Test-Summary-Rows'), '1');
+    const filtered = await call(path.replace('type=steps', 'type=other'), a.agent_token);
+    assert.equal(filtered.body.metric_daily_summaries[0].total_value, 11);
+    assert.notEqual(filtered.headers.get('X-Test-Summary-Rows'), '0');
+    const empty = await call(path.replace('from=2026-03-08', 'from=2026-03-09'), a.agent_token);
+    assert.deepEqual(empty.body.metric_daily_summaries, []);
+    assert.equal((await call(path.replace('from=2026-03-08', 'from=2026-02-30'), a.agent_token)).status, 400);
+});
+test('cached summaries refresh after uploads, corrections, timezone changes and deletions', async () => {
+    const a = await provision();
+    const path = '/api/agent/health-data';
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one', { value: 7 })]));
+    await call(path, a.agent_token);
+    assert.equal((await call(path, a.agent_token)).headers.get('X-Test-Summary-Rows'), '0');
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one', { value: 9 }), metric('two', { value: 3 })]));
+    let r = await call(path, a.agent_token);
+    assert.equal(r.body.metric_daily_summaries[0].total_value, 12);
+    assert.equal(r.headers.get('X-Test-Summary-Rows'), '2');
+    await db.prepare('UPDATE sync_batches SET timezone=? WHERE workspace_id=?').bind('Pacific/Honolulu', a.workspace_id).run();
+    r = await call(path, a.agent_token);
+    assert.equal(r.body.metric_daily_summaries[0].local_date, '2026-03-07');
+    await call('/api/apple-health/sync', a.ingest_token, payload([], { deletions: [{ id: 'one', kind: 'metric' }] }));
+    r = await call(path, a.agent_token);
+    assert.equal(r.body.metric_daily_summaries[0].total_value, 3);
+    await db.prepare('DELETE FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id).run();
+    assert.deepEqual((await call(path, a.agent_token)).body.metric_daily_summaries, []);
+});
+test('summary cache hits still enforce token rotation and workspace reset', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('private')]));
+    await call('/api/agent/health-data', a.agent_token);
+    await call('/api/agent/health-data', a.agent_token);
+    const rotated = await call('/api/hosted/agent-token', a.ingest_token, {});
+    assert.equal((await call('/api/agent/health-data', a.agent_token)).status, 403);
+    const fresh = await call('/api/agent/health-data', rotated.body.agent_token);
+    assert.equal(fresh.status, 200);
+    assert.equal(fresh.headers.get('X-Test-Summary-Rows'), '0');
+    await call('/api/hosted/workspaces/reset', a.ingest_token, {});
+    assert.equal((await call('/api/agent/health-data', rotated.body.agent_token)).status, 403);
+});
+test('summary cache never retains a scan changed by a concurrent write', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one')]));
+    const raced = await call('/api/agent/health-data', a.agent_token, undefined, { 'X-Test-Scenario': 'mutate-after-summary', 'X-Test-Workspace': a.workspace_id });
+    assert.equal(raced.status, 200);
+    const fresh = await call('/api/agent/health-data', a.agent_token);
+    assert.equal(fresh.body.metric_daily_summaries[0].total_value, 42);
+    assert.equal(fresh.headers.get('X-Test-Summary-Rows'), '1');
+    assert.equal((await call('/api/agent/health-data', a.agent_token)).headers.get('X-Test-Summary-Rows'), '0');
+});
+test('authorization is rechecked after a summary cache hit', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('private')]));
+    await call('/api/agent/health-data', a.agent_token);
+    const revoked = await call('/api/agent/health-data', a.agent_token, undefined, { 'X-Test-Scenario': 'revoke-on-summary-hit', 'X-Test-Workspace': a.workspace_id });
+    assert.equal(revoked.status, 403);
+    assert.deepEqual(revoked.body, { detail: 'Invalid bearer token' });
+});
+test('summary revisions coalesce writes, roll back failures and follow workout changes', async () => {
+    const a = await provision();
+    const workout = { id: 'walk', activity_type: 'walk', start_at: stamp, end_at: stamp, duration_seconds: 60, source_name: 'Synthetic' };
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one')], { workouts: [workout] }));
+    await call('/api/agent/health-data', a.agent_token);
+    const revision = () => db.prepare('SELECT revision,dirty FROM workspace_summary_revisions WHERE workspace_id=?').bind(a.workspace_id).first();
+    const initial = await revision();
+    assert.equal(initial.dirty, 0);
+    await db.prepare('UPDATE health_metrics SET value=2 WHERE workspace_id=?').bind(a.workspace_id).run();
+    const changed = await revision();
+    assert.notEqual(changed.revision, initial.revision);
+    assert.equal(changed.dirty, 1);
+    await db.prepare('UPDATE health_metrics SET value=3 WHERE workspace_id=?').bind(a.workspace_id).run();
+    assert.deepEqual(await revision(), changed);
+    await call('/api/agent/health-data', a.agent_token);
+    const clean = await revision();
+    const invalid = await call('/api/apple-health/sync', a.ingest_token, payload([metric('bad', { end_at: '2020-01-01T00:00:00Z' })], { deletions: [{ id: 'one', kind: 'metric' }] }));
+    assert.equal(invalid.status, 500);
+    assert.deepEqual(await revision(), clean);
+    assert.equal((await call('/api/agent/health-data', a.agent_token)).headers.get('X-Test-Summary-Rows'), '0');
+    await db.prepare('UPDATE health_workouts SET duration_seconds=120 WHERE workspace_id=?').bind(a.workspace_id).run();
+    const refreshed = await call('/api/agent/health-data', a.agent_token);
+    assert.equal(refreshed.body.workout_daily_summaries[0].duration_minutes, 2);
+    const filtered = await call('/api/agent/health-data?activity_type=run', a.agent_token);
+    assert.deepEqual(filtered.body.workout_daily_summaries, []);
+    await db.prepare('DELETE FROM health_workouts WHERE workspace_id=?').bind(a.workspace_id).run();
+    assert.deepEqual((await call('/api/agent/health-data', a.agent_token)).body.workout_daily_summaries, []);
+});
+test('legacy ingest ordering preserves deletion counts after the revision migration', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one')]));
+    await call('/api/agent/health-data', a.agent_token);
+    const results = await db.batch([
+        db.prepare('UPDATE workspace_devices SET last_seen_at=? WHERE workspace_id=?').bind(stamp, a.workspace_id),
+        db.prepare('DELETE FROM health_metrics WHERE workspace_id=?').bind(a.workspace_id),
+    ]);
+    assert.equal(results[1].meta.changes, 1);
+    assert.deepEqual((await call('/api/agent/health-data', a.agent_token)).body.metric_daily_summaries, []);
+});
+test('health-data remains compatible before the summary migration is installed', async () => {
+    const a = await provision();
+    await call('/api/apple-health/sync', a.ingest_token, payload([metric('one')]));
+    const before = await call('/api/agent/health-data', a.agent_token);
+    await db.exec('DROP TABLE workspace_summary_revisions');
+    try {
+        for (let i = 0; i < 2; i++) {
+            const legacy = await call('/api/agent/health-data', a.agent_token);
+            assert.equal(legacy.status, 200);
+            assert.deepEqual(legacy.body, before.body);
+            assert.equal(legacy.headers.get('X-Test-Summary-Rows'), '1');
+        }
+    } finally {
+        const migration = await readFile(new URL('../migrations/0004_summary_revisions.sql', import.meta.url), 'utf8');
+        await db.exec(migration.split('\n').slice(0, 2).join('\n'));
+    }
 });
 test('locked and missing configuration fail before auth; health checks D1; CORS', async () => {
     for (const scenario of ['locked', 'missing-state', 'unknown-state', 'missing-secret']) {

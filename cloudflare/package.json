@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/hosted.test.mjs test/legacy.test.mjs",
+    "test": "node --test test/hosted.test.mjs test/legacy.test.mjs test/summary-cache.test.mjs",
     "typecheck": "npm run types --silent >/dev/null && ../web/node_modules/.bin/tsc --noEmit",
     "types": "../web/node_modules/.bin/wrangler types worker-configuration.d.ts",
     "dry-run": "../web/node_modules/.bin/wrangler deploy --dry-run --outdir .wrangler/dry-run"

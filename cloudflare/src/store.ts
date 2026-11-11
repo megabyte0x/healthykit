@@ -1,5 +1,6 @@
 import { SourceCollation } from './collation';
 import { LocalDates, Summaries } from './summaries';
+import { SummaryCache } from './summary-cache';
 export type Row = Record<string, any>;
 export type Kind = 'ingest' | 'agent_read';
 export type Table = 'health_metrics' | 'health_workouts' | 'sync_batches';
@@ -56,10 +57,11 @@ export const byteLength = (value: unknown) => encoder.encode(JSON.stringify(valu
 const chunks = <T>(rows: T[], size: number): T[][] => Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, (i + 1) * size));
 const placeholders = (n: number) => Array(n).fill('?').join(',');
 const identity = (row: Row) => JSON.stringify('id' in row ? [row.device_id, row.id] : [row.export_id]);
+const summaryCache = new SummaryCache();
 export class Store {
     readonly collation = new SourceCollation();
     readonly dates = new LocalDates();
-    readonly stats = { statements: 0, rowsRead: 0, rowsWritten: 0, maxBindings: 0, maxPageBytes: 0, summaryRows: 0, summaryGroups: 0, summaryKeyBytes: 0, maxTieKeys: 0, maxTieBytes: 0, responseBytes: 0, durationMs: 0 };
+    readonly stats = { statements: 0, rowsRead: 0, rowsWritten: 0, maxBindings: 0, maxPageBytes: 0, summaryRows: 0, summaryGroups: 0, summaryKeyBytes: 0, summaryCacheHits: 0, summaryCacheMisses: 0, maxTieKeys: 0, maxTieBytes: 0, responseBytes: 0, durationMs: 0 };
     private started = Date.now();
     constructor(private db: D1Database) { }
     statement(sql: string, values: unknown[] = []): D1PreparedStatement {
@@ -158,7 +160,7 @@ export class Store {
                 const ids = [...new Set<string>(deletions.filter(d => d.kind === kind).map(d => d.id))];
                 for (const part of chunks(ids, 98)) {
                     deletedIndexes.push(statements.length);
-                    statements.push(this.statement(`DELETE FROM ${table} WHERE workspace_id=? AND device_id=? AND id IN (${placeholders(part.length)})`, [workspace_id, device_id, ...part]));
+                    statements.push(this.statement(`DELETE FROM ${table} WHERE workspace_id=? AND device_id=? AND id IN (${placeholders(part.length)}) RETURNING id`, [workspace_id, device_id, ...part]));
                 }
             }
             for (const [table, rows] of [['health_metrics', metrics], ['health_workouts', workouts]] as const) {
@@ -183,7 +185,7 @@ export class Store {
             }
         }
         const results = await this.mutate(auth, statements);
-        return { ok: true, received: metrics.length + workouts.length, duplicates: duplicateIndexes.reduce((n, i) => n + Number(results[i].results[0].n), 0), deleted: deletedIndexes.reduce((n, i) => n + results[i].meta.changes, 0), workspace_id, export_id };
+        return { ok: true, received: metrics.length + workouts.length, duplicates: duplicateIndexes.reduce((n, i) => n + Number(results[i].results[0].n), 0), deleted: deletedIndexes.reduce((n, i) => n + results[i].results.length, 0), workspace_id, export_id };
     }
     private filter(table: Table, auth: Auth, url: URL) {
         const clauses = ['r.workspace_id=?'], values: unknown[] = [auth.workspaceId];
@@ -281,7 +283,41 @@ export class Store {
         devices.sort((a, b) => this.collation.compare(a.device_id, b.device_id));
         return { metric_types, activity_types, timezones, devices };
     }
+    private async summaryRevision(auth: Auth, observe = false): Promise<string | null> {
+        const statements = observe
+            ? [this.statement('UPDATE workspace_summary_revisions SET dirty=0 WHERE workspace_id=? AND dirty=1', [auth.workspaceId])]
+            : [];
+        statements.push(this.statement('SELECT revision FROM workspace_summary_revisions WHERE workspace_id=?', [auth.workspaceId]));
+        try {
+            const results = await this.mutate(auth, statements);
+            return results.at(-1)!.results[0]?.revision ?? null;
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('no such table: workspace_summary_revisions')) return null;
+            throw error;
+        }
+    }
     async summaries(auth: Auth, url: URL) {
+        const filters = [this.filter('health_metrics', auth, url), this.filter('health_workouts', auth, url)];
+        const revision = await this.summaryRevision(auth, true);
+        // The database-generated revision separates databases and invalidates every
+        // isolate's cache, including writes from old Worker versions and admin SQL.
+        const key = JSON.stringify([auth.workspaceId, revision, filters]);
+        const cached = revision ? summaryCache.get(key) : undefined;
+        if (cached) {
+            if (cached.groups > capacity.groups || cached.keyBytes > capacity.groupBytes)
+                throw new HttpError(503, 'Summary capacity exceeded; narrow the requested range');
+            this.stats.summaryGroups = cached.groups;
+            this.stats.summaryKeyBytes = cached.keyBytes;
+            this.stats.summaryCacheHits++;
+            return JSON.parse(cached.body) as ReturnType<Summaries['finish']>;
+        }
+        this.stats.summaryCacheMisses++;
+        const result = await this.scanSummaries(auth, url);
+        if (revision && revision === await this.summaryRevision(auth))
+            summaryCache.put(key, JSON.stringify(result), this.stats.summaryGroups, this.stats.summaryKeyBytes);
+        return result;
+    }
+    private async scanSummaries(auth: Auth, url: URL) {
         const summary = new Summaries(this.dates, capacity.groups, capacity.groupBytes, this.collation);
         for (const table of ['health_metrics', 'health_workouts'] as const) {
             const f = this.filter(table, auth, url);
