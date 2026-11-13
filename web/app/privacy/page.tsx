@@ -3,7 +3,7 @@ import Image from "next/image";
 import { absoluteUrl } from "@/lib/site";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 
-const contactEmail = "contact@megabyte0x.xyz";
+const contactEmail = "dev@megabyte.sh";
 const pageTitle = "Privacy Policy";
 const pageDescription =
   "Privacy policy for HealthSync, the iOS app that reads selected Apple Health data on-device and syncs it only to a private destination the user accepts or configures.";
