@@ -281,3 +281,5 @@ Production deployments should use durable storage. The Vercel deployment stores 
 Copyright 2026 megabyte0x.
 
 HealthSync is licensed under the Apache License, Version 2.0 (`Apache-2.0`). See [LICENSE](LICENSE) for the full terms.
+
+For a CloudBase PostgreSQL deployment with optional Casdoor-authenticated MCP, see the [Tencent CloudBase deployment guide](cloudrun/health-sync-api/README.md).

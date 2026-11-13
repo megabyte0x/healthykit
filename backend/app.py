@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import repository as sql_repository
 from .auth import AuthContext, bearer_token, resolve_agent_auth, resolve_sync_auth
 from .config import Settings
 from .database import create_engine_for_url, create_session_factory
@@ -43,15 +44,34 @@ def create_app(
     settings: Settings | None = None,
     *,
     session_factory: sessionmaker[Session] | None = None,
+    storage_adapter=None,
+    request_dependencies=None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
+    if storage_adapter is not None:
+        session_factory = storage_adapter.session
     if session_factory is None:
         engine = create_engine_for_url(settings.database_url)
         session_factory = create_session_factory(engine)
 
-    app = FastAPI(title="HealthSync Backend", version="1.0.0")
+    # Optional persistence/auth port; the SQLAlchemy implementation stays the default.
+    repository = storage_adapter or sql_repository
+    get_agent_catalog = repository.get_agent_catalog
+    list_metric_summary_items = repository.list_metric_summary_items
+    list_metrics = repository.list_metrics
+    list_sync_batches = repository.list_sync_batches
+    list_workout_summary_items = repository.list_workout_summary_items
+    list_workouts = repository.list_workouts
+    persist_sync_payload = repository.persist_sync_payload
+    provision_hosted_workspace = repository.provision_hosted_workspace
+    reset_hosted_workspace = repository.reset_hosted_workspace
+    rotate_hosted_agent_token = repository.rotate_hosted_agent_token
+
+    app = FastAPI(title="HealthSync Backend", version="1.0.0", dependencies=request_dependencies or [])
 
     def require_self_hosted_auth(authorization: Annotated[str | None, Header()] = None) -> AuthContext:
+        if storage_adapter is not None:
+            return storage_adapter.resolve_auth(authorization, "agent_read")
         token = bearer_token(authorization)
         if not secrets.compare_digest(token.encode("utf-8"), settings.api_token.encode("utf-8")):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bearer token")
@@ -72,12 +92,16 @@ def create_app(
         authorization: Annotated[str | None, Header()] = None,
         db: Session = Depends(get_db),
     ) -> AuthContext:
+        if storage_adapter is not None:
+            return storage_adapter.resolve_auth(authorization, "ingest")
         return resolve_sync_auth(db, settings, authorization)
 
     def require_agent_auth(
         authorization: Annotated[str | None, Header()] = None,
         db: Session = Depends(get_db),
     ) -> AuthContext:
+        if storage_adapter is not None:
+            return storage_adapter.resolve_auth(authorization, "agent_read")
         return resolve_agent_auth(db, settings, authorization)
 
     @app.get("/health")
