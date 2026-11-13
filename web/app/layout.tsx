@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import {
   absoluteUrl,
   APP_STORE_URL,
@@ -9,6 +10,9 @@ import {
 } from "@/lib/site";
 import "./globals.css";
 import "./site.css";
+
+const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 const siteStructuredData = {
   "@context": "https://schema.org",
@@ -93,7 +97,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <head>
         <link rel="alternate" type="text/plain" href="/llms.txt" title="HealthSync documentation for AI assistants" />
       </head>
